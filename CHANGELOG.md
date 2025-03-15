@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.0.0...unrspack-resolver-v1.0.1) - 2025-03-15
+
+### Other
+
+- let's release to npm
+
 ## [1.0.0](https://github.com/unrs/rspack-resolver/releases/tag/unrspack-resolver-v1.0.0) - 2025-03-15
 
 ### Added
