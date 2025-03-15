@@ -1,5 +1,5 @@
 {
-  "name": "oxc-resolver",
+  "name": "rspack-resolver",
   "version": "1.12.0",
   "description": "Oxc Resolver Node API",
   "main": "index.js",
