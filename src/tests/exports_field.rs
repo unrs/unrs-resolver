@@ -45,6 +45,7 @@ fn test_simple() {
         ("should resolve with wildcard pattern #8", f5.clone(), "m/middle-4/f/nested", f5.join("node_modules/m/src/middle-4/f/f.js")),
         ("should resolve with wildcard pattern #9", f5.clone(), "m/middle-5/f$/$", f5.join("node_modules/m/src/middle-5/f$/$.js")),
         ("should resolve with query string #10", f6.clone(), "export-query/add", f6.join("add.js?query1?query2")),
+        // Sadly we can not use real `minus.js?query` and `equal.js?query` file due to Windows: invalid path
         ("should resolve with query string #10", f6.clone(), "export-query/minus", f6.join("minus.js?query?extra")),
         ("should resolve with query string #10", f6.clone(), "export-query/equal", f6.join("equal.js?query")),
     ];
