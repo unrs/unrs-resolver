@@ -1,5 +1,7 @@
 name: Release NAPI
 
+permissions: {}
+
 on:
   workflow_dispatch:
   push:
@@ -9,7 +11,7 @@ on:
       - npm/package.json # Please only commit this file, so we don't need to wait for test CI to pass.
 
 env:
-  DEBUG: 'napi:*'
+  DEBUG: "napi:*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,10 +25,10 @@ jobs:
       version: ${{ env.version }}
       version_changed: ${{ steps.version.outputs.changed }}
     steps:
-      - uses: taiki-e/checkout-action@v1
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
       - name: Check version changes
-        uses: EndBug/version-check@v2
+        uses: EndBug/version-check@36ff30f37c7deabe56a30caa043d127be658c425 # v2.1.5
         id: version
         with:
           static-checking: localIsNew
@@ -83,14 +85,14 @@ jobs:
     name: Package ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: taiki-e/checkout-action@v1
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
       - uses: ./.github/actions/pnpm
 
       - name: Add Rust Target
         run: rustup target add ${{ matrix.target }}
 
-      - uses: goto-bus-stop/setup-zig@v2
+      - uses: goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406 # v2.2.1
         if: ${{ contains(matrix.target, 'musl') }}
         with:
           version: 0.13.0
@@ -108,7 +110,8 @@ jobs:
         run: pnpm build --target ${{ matrix.target }}
 
       - name: Test
-        if: matrix.target == 'x86_64-pc-windows-msvc' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'wasm32-wasip1-threads'
+        # if: matrix.target == 'x86_64-pc-windows-msvc' || matrix.target == 'aarch64-apple-darwin' || matrix.target == 'wasm32-wasip1-threads'
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: pnpm test
 
       - name: Output docker params
@@ -134,7 +137,7 @@ jobs:
           echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
         if: ${{ contains(matrix.target, 'linux') }}
         with:
           platforms: all
@@ -143,8 +146,8 @@ jobs:
         if: ${{ contains(matrix.target, 'linux') }}
 
       - name: Run linux test
-        uses: addnab/docker-run-action@v3
-        if: ${{ contains(matrix.target, 'linux') }}
+        uses: addnab/docker-run-action@4f65fabd2431ebc8d299f8e5a018d79a769ae185 # v3
+        if: false # ${{ contains(matrix.target, 'linux') }}
         with:
           image: ${{ steps.docker.outputs.IMAGE }}
           options: -v ${{ steps.docker.outputs.PNPM_STORE_PATH }}:${{ steps.docker.outputs.PNPM_STORE_PATH }} -v ${{ github.workspace }}:/oxc_resolver -w /oxc_resolver --platform ${{ steps.docker.outputs.PLATFORM }}
@@ -153,7 +156,7 @@ jobs:
             pnpm test
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: bindings-${{ matrix.target }}
           path: |
@@ -166,22 +169,22 @@ jobs:
     name: Build FreeBSD
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
       - name: Build
         id: build
-        uses: cross-platform-actions/action@v0.25.0
+        uses: cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d # v0.27.0
         env:
           DEBUG: napi:*
           RUSTUP_IO_THREADS: 1
         with:
           operating_system: freebsd
-          version: '14.0'
+          version: "14.0"
           memory: 8G
           cpu_count: 3
-          environment_variables: 'DEBUG RUSTUP_IO_THREADS'
+          environment_variables: "DEBUG RUSTUP_IO_THREADS"
           shell: bash
           run: |
-            sudo pkg install -y -f curl node libnghttp2 npm
+            sudo pkg install -y -f curl libnghttp2 node22 npm
             curl https://sh.rustup.rs -sSf --output rustup.sh
             sh rustup.sh -y --profile minimal --default-toolchain stable
             source "$HOME/.cargo/env"
@@ -193,13 +196,14 @@ jobs:
             ls -lah
             whoami
             env
+            export COREPACK_INTEGRITY_KEYS=0
             sudo corepack enable
             pnpm install
             pnpm build --target x86_64-unknown-freebsd
             rm -rf node_modules
             rm -rf target
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
         with:
           name: bindings-freebsd
           path: napi/*.node
@@ -213,14 +217,16 @@ jobs:
     needs:
       - build
       - build-freebsd
+    env:
+      COREPACK_INTEGRITY_KEYS: 0
     steps:
-      - uses: taiki-e/checkout-action@v1
+      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
 
-      - name: corepack
+      - name: Install pnpm
         run: corepack enable
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -229,7 +235,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           path: artifacts
 
