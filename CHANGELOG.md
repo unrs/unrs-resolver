@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.3](https://github.com/unrs/rspack-resolver/compare/rspack_resolver-v0.5.2...rspack_resolver-v0.5.3) - 2025-03-15
+
+### Fixed
+
+- abs path in main fields ([#52](https://github.com/unrs/rspack-resolver/pull/52))
+
 ## [0.5.2](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.5.1...rspack_resolver-v0.5.2) - 2025-02-28
 
 ### Added
