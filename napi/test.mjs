@@ -4,7 +4,7 @@ import resolve, { ResolverFactory } from './index.js';
 
 console.log(`Testing on ${process.platform}-${process.arch}`);
 
-const dir = import.meta.dirname
+const dir = import.meta.dirname;
 
 // `resolve`
 assert.deepStrictEqual(resolve.sync(dir, './index.js').path, path.join(dir, 'index.js'));
