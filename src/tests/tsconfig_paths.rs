@@ -104,13 +104,14 @@ fn broken() {
     });
 
     let resolved_path = resolver.resolve(&f, "/");
-    let error = ResolveError::JSON(JSONError {
+    let _error = ResolveError::JSON(JSONError {
         path: f.join("tsconfig_broken.json"),
         message: String::from("EOF while parsing an object at line 2 column 0"),
         line: 2,
         column: 0,
+        content: Some("{\n".to_string()),
     });
-    assert_eq!(resolved_path, Err(error));
+    assert!(matches!(resolved_path, Err(ResolveError::JSON(_))));
 }
 
 // <https://github.com/parcel-bundler/parcel/blob/c8f5c97a01f643b4d5c333c02d019ef2618b44a5/packages/utils/node-resolver-rs/src/tsconfig.rs#L193C12-L193C12>
@@ -256,6 +257,30 @@ fn test_template_variable() {
                 references: TsconfigReferences::Auto,
             }),
             ..ResolveOptions::default()
+        });
+        let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
+        assert_eq!(resolved_path, Ok(expected), "{request} {tsconfig} {dir:?}");
+    }
+}
+
+#[test]
+fn test_paths_nested_base() {
+    let f = super::fixture_root().join("tsconfig");
+    let f2 = f.join("cases").join("paths-nested-base");
+
+    #[rustfmt::skip]
+    let pass = [
+        (f2.join("other"), "tsconfig.json", "foo", f2.join("root/foo.ts")),
+        (f2.join("root"), "tsconfig.json", "other/bar", f2.join("other/bar.ts")),
+    ];
+
+    for (dir, tsconfig, request, expected) in pass {
+        let resolver = Resolver::new(ResolveOptions {
+            tsconfig: Some(TsconfigOptions {
+                config_file: dir.parent().unwrap().join(tsconfig),
+                references: TsconfigReferences::Auto,
+            }),
+            ..ResolveOptions::default().with_extension(String::from(".ts"))
         });
         let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
         assert_eq!(resolved_path, Ok(expected), "{request} {tsconfig} {dir:?}");

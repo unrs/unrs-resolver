@@ -1,6 +1,5 @@
-<p align="center">
-  <img alt="OXC Logo" src="https://cdn.jsdelivr.net/gh/oxc-project/oxc-assets/preview-universal.png" width="700">
-</p>
+> [!NOTE]\
+> This is a fork of [rspack-resolver](https://github.com/oxc-project/rspack-resolver), and will be used in Rspack cause 100% compatible with enhanced-resolve is the non-goal of rspack-resolver itself, we may add enhanced-resolve specific features like [`pnp support`](https://github.com/web-infra-dev/rspack/issues/2236) and [`alternative support`](https://github.com/web-infra-dev/rspack/issues/5052) in the future.
 
 <div align="center">
 
@@ -12,16 +11,15 @@
 [![Code Coverage][code-coverage-badge]][code-coverage-url]
 [![CodSpeed Badge][codspeed-badge]][codspeed-url]
 [![Sponsors][sponsors-badge]][sponsors-url]
-[![Discord chat][discord-badge]][discord-url]
 [![MIT licensed][license-badge]][license-url]
 
 </div>
 
-# Oxc Resolver
+# Rspack Resolver
 
 Rust port of [enhanced-resolve].
 
-- released on [crates.io](https://crates.io/crates/oxc_resolver) and [npm](https://www.npmjs.com/package/oxc-resolver).
+- released on [crates.io](https://crates.io/crates/unrspack_resolver) and [npm](https://www.npmjs.com/package/rspack-resolver).
 - built-in [tsconfig-paths-webpack-plugin]
   - support extending tsconfig defined in `tsconfig.extends`
   - support paths alias defined in `tsconfig.compilerOptions.paths`
@@ -117,7 +115,7 @@ Quoting esbuild's documentation:
 
 The following options are aligned with [enhanced-resolve], and is implemented for Rust crate usage.
 
-See [index.d.ts](https://github.com/oxc-project/oxc-resolver/blob/main/napi/index.d.ts) for Node.js usage.
+See [index.d.ts](https://github.com/unrs/rspack-resolver/blob/main/napi/index.d.ts) for Node.js usage.
 
 | Field            | Default                   | Description                                                                                                                                               |
 | ---------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -248,21 +246,19 @@ Oxc partially copies code from the following projects.
 
 [enhanced-resolve]: https://github.com/webpack/enhanced-resolve
 [tsconfig-paths-webpack-plugin]: https://github.com/dividab/tsconfig-paths-webpack-plugin
-[discord-badge]: https://img.shields.io/discord/1079625926024900739?logo=discord&label=Discord
-[discord-url]: https://discord.gg/9uXCAwqQZW
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[license-url]: https://github.com/oxc-project/oxc-resolver/blob/main/LICENSE
-[ci-badge]: https://github.com/oxc-project/oxc-resolver/actions/workflows/ci.yml/badge.svg?event=push&branch=main
-[ci-url]: https://github.com/oxc-project/oxc-resolver/actions/workflows/ci.yml?query=event%3Apush+branch%3Amain
-[code-coverage-badge]: https://codecov.io/github/oxc-project/oxc-resolver/branch/main/graph/badge.svg
-[code-coverage-url]: https://codecov.io/gh/oxc-project/oxc-resolver
-[sponsors-badge]: https://img.shields.io/github/sponsors/Boshen
-[sponsors-url]: https://github.com/sponsors/Boshen
+[license-url]: https://github.com/unrs/rspack-resolver/blob/main/LICENSE
+[ci-badge]: https://github.com/unrs/rspack-resolver/actions/workflows/ci.yml/badge.svg?event=push&branch=main
+[ci-url]: https://github.com/unrs/rspack-resolver/actions/workflows/ci.yml?query=event%3Apush+branch%3Amain
+[code-coverage-badge]: https://codecov.io/github/unrs/rspack-resolver/branch/main/graph/badge.svg
+[code-coverage-url]: https://codecov.io/gh/unrs/rspack-resolver
+[sponsors-badge]: https://img.shields.io/github/sponsors/JounQin
+[sponsors-url]: https://github.com/sponsors/JounQin
 [codspeed-badge]: https://img.shields.io/endpoint?url=https://codspeed.io/badge.json
-[codspeed-url]: https://codspeed.io/oxc-project/oxc-resolver
+[codspeed-url]: https://codspeed.io/unrs/rspack-resolver
 [crates-badge]: https://img.shields.io/crates/d/oxc_resolver?label=crates.io
 [crates-url]: https://crates.io/crates/oxc_resolver
 [docs-badge]: https://img.shields.io/docsrs/oxc_resolver
-[docs-url]: https://docs.rs/oxc_resolver/latest/oxc_resolver
-[npm-badge]: https://img.shields.io/npm/dw/oxc-resolver?label=npm
-[npm-url]: https://www.npmjs.com/package/oxc-resolver
+[docs-url]: https://docs.rs/unrspack-resolver
+[npm-badge]: https://img.shields.io/npm/dw/rspack-resolver?label=npm
+[npm-url]: https://www.npmjs.com/package/rspack-resolver

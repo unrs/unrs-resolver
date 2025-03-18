@@ -13,7 +13,9 @@
     "fixtures/**",
     "CHANGELOG.md",
     "pnpm-workspace.yaml",
-    "pnpm-lock.yaml"
+    "pnpm-lock.yaml",
+    "napi/*.{cjs,js,mjs,d.ts}",
+    "!napi/test.mjs"
   ],
   "plugins": [
     "https://plugins.dprint.dev/typescript-0.93.3.wasm",

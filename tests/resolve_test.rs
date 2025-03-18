@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use oxc_resolver::{ResolveError, ResolveOptions, Resolver};
+use unrspack_resolver::{ResolveError, ResolveOptions, Resolver};
 
 fn dir() -> PathBuf {
     env::current_dir().unwrap()
@@ -12,7 +12,7 @@ fn chinese() {
     let specifier = "./fixtures/misc/中文/中文.js";
     let resolution = Resolver::new(ResolveOptions::default()).resolve(&dir, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(dir.join("fixtures/misc/中文/中文.js"))
     );
 }
@@ -22,7 +22,7 @@ fn chinese() {
 fn styled_components() {
     let dir = dir();
     let path = dir.join("fixtures/pnpm");
-    let module_path = dir.join("node_modules/.pnpm/styled-components@6.1.1_react-dom@18.3.1_react@18.3.1__react@18.3.1/node_modules/styled-components");
+    let module_path = dir.join("node_modules/.pnpm/styled-components@6.1.15_react-dom@19.0.0_react@19.0.0__react@19.0.0/node_modules/styled-components");
     let specifier = "styled-components";
 
     // cjs
@@ -30,7 +30,7 @@ fn styled_components() {
         ResolveOptions { alias_fields: vec![vec!["browser".into()]], ..ResolveOptions::default() };
     let resolution = Resolver::new(options).resolve(&path, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(module_path.join("dist/styled-components.browser.cjs.js"))
     );
 
@@ -42,7 +42,7 @@ fn styled_components() {
     };
     let resolution = Resolver::new(options).resolve(&path, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(module_path.join("dist/styled-components.browser.esm.js"))
     );
 }
@@ -51,14 +51,14 @@ fn styled_components() {
 fn axios() {
     let dir = dir();
     let path = dir.join("fixtures/pnpm");
-    let module_path = dir.join("node_modules/.pnpm/axios@1.6.2/node_modules/axios");
+    let module_path = dir.join("node_modules/.pnpm/axios@1.8.3/node_modules/axios");
     let specifier = "axios";
 
     // default
     let options = ResolveOptions::default();
     let resolution = Resolver::new(options).resolve(&path, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(module_path.join("index.js"))
     );
 
@@ -69,7 +69,7 @@ fn axios() {
     };
     let resolution = Resolver::new(options).resolve(&path, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(module_path.join("dist/browser/axios.cjs"))
     );
 
@@ -80,7 +80,7 @@ fn axios() {
     };
     let resolution = Resolver::new(options).resolve(&path, specifier);
     assert_eq!(
-        resolution.map(oxc_resolver::Resolution::into_path_buf),
+        resolution.map(unrspack_resolver::Resolution::into_path_buf),
         Ok(module_path.join("dist/node/axios.cjs"))
     );
 }
@@ -137,7 +137,7 @@ fn decimal_js() {
     let dir = dir();
     let path = dir.join("fixtures/pnpm");
     let module_path =
-        dir.join("node_modules/.pnpm/decimal.js@10.4.3/node_modules/decimal.js/decimal.mjs");
+        dir.join("node_modules/.pnpm/decimal.js@10.5.0/node_modules/decimal.js/decimal.mjs");
 
     let resolvers = [
         // with `extension_alias`
@@ -164,7 +164,7 @@ fn decimal_js_from_mathjs() {
     let dir = dir();
     let path = dir.join("node_modules/.pnpm/mathjs@13.2.0/node_modules/mathjs/lib/esm");
     let module_path =
-        dir.join("node_modules/.pnpm/decimal.js@10.4.3/node_modules/decimal.js/decimal.mjs");
+        dir.join("node_modules/.pnpm/decimal.js@10.5.0/node_modules/decimal.js/decimal.mjs");
 
     let resolvers = [
         // with `extension_alias`
@@ -195,14 +195,14 @@ fn nested_symlinks() {
         Resolver::new(ResolveOptions::default())
             // ./apps/web/nm/@repo/typescript-config is a symlink
             .resolve(&dir, "./apps/web/nm/@repo/typescript-config/index.js")
-            .map(oxc_resolver::Resolution::into_path_buf),
+            .map(unrspack_resolver::Resolution::into_path_buf),
         Ok(dir.join("nm/index.js"))
     );
     assert_eq!(
         Resolver::new(ResolveOptions::default())
             // ./apps/tooling is a symlink
             .resolve(&dir, "./apps/tooling/typescript-config/index.js")
-            .map(oxc_resolver::Resolution::into_path_buf),
+            .map(unrspack_resolver::Resolution::into_path_buf),
         Ok(dir.join("nm/index.js"))
     );
 }

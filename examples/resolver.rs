@@ -1,8 +1,8 @@
-// See documentation at <https://docs.rs/oxc_resolver>
+// See documentation at <https://docs.rs/unrspack_resolver>
 
 use std::{env, path::PathBuf};
 
-use oxc_resolver::{AliasValue, ResolveOptions, Resolver};
+use unrspack_resolver::{AliasValue, ResolveOptions, Resolver};
 
 fn main() {
     let path = PathBuf::from(env::args().nth(1).expect("path"));

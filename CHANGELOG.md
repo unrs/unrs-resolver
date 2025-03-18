@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.1.1...unrspack-resolver-v1.1.2) - 2025-03-16
+
+### Fixed
+
+- references should take higher priority ([#13](https://github.com/unrs/rspack-resolver/pull/13))
+- takes paths and references into account at the same time
+- should always try resolve_path_alias
+
+## [1.1.1](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.1.0...unrspack-resolver-v1.1.1) - 2025-03-16
+
+### Other
+
+- bump all (dev) deps
+- bump to edition 2024
+
+## [1.1.0](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.0.0...unrspack-resolver-v1.1.0) - 2025-03-15
+
+### Added
+
+- support resolving path with extra query ([#7](https://github.com/unrs/rspack-resolver/pull/7))
+
+## [1.0.0](https://github.com/unrs/rspack-resolver/releases/tag/unrspack-resolver-v1.0.0) - 2025-03-15
+
 ## [5.0.0](https://github.com/oxc-project/oxc-resolver/compare/oxc_resolver-v4.2.0...oxc_resolver-v5.0.0) - 2025-03-07
 
 ### <!-- 0 -->Features
@@ -127,6 +150,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - use `fs::canonicalize` to cover symlink edge cases ([#284](https://github.com/oxc-project/oxc-resolver/pull/284))
 - extensionAlias cannot resolve mathjs ([#273](https://github.com/oxc-project/oxc-resolver/pull/273))
+
+## [0.5.2](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.5.1...rspack_resolver-v0.5.2) - 2025-02-28
+
+### Added
+
+- *(pnp)* support link (#49)
+
+### Other
+
+- bump pnp 0.9.1 (#50)
+
+## [0.5.1](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.5.0...rspack_resolver-v0.5.1) - 2025-02-11
+
+### Fixed
+
+- 🐛 pnp feat respect options.enable_pnp (#47)
+
+## [0.4.0](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.3.6...rspack_resolver-v0.4.0) - 2024-12-26
+
+### Feat
+
+- Implements the PnP manifest lookup within the resolver ([#39](https://github.com/web-infra-dev/rspack-resolver/pull/39))
+
+## [0.3.6](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.3.5...rspack_resolver-v0.3.6) - 2024-12-13
+
+### Fixed
+
+- alias match request end with slash (#35)
+
+## [0.3.5](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.3.4...rspack_resolver-v0.3.5) - 2024-10-21
+
+### Fixed
+
+- resolve mathjs error when using `extensionAlias` ([#31](https://github.com/web-infra-dev/rspack-resolver/pull/31))
+
+## [0.3.4](https://github.com/web-infra-dev/rspack-resolver/compare/rspack_resolver-v0.3.3...rspack_resolver-v0.3.4) - 2024-10-21
+
+### Added
+
+- rebase and refine extension-alias error format ([#30](https://github.com/web-infra-dev/rspack-resolver/pull/30))
 
 ## [1.12.0](https://github.com/oxc-project/oxc_resolver/compare/oxc_resolver-v1.11.0...oxc_resolver-v1.12.0) - 2024-09-25
 

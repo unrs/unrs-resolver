@@ -144,18 +144,13 @@ pub trait TsConfig: Sized {
     /// `specifier` can be either a real path or an alias.
     #[must_use]
     fn resolve(&self, path: &Path, specifier: &str) -> Vec<PathBuf> {
-        if path.starts_with(self.base_path()) {
-            let paths = self.resolve_path_alias(specifier);
-            if !paths.is_empty() {
-                return paths;
-            }
-        }
+        let paths = self.resolve_path_alias(specifier);
         for tsconfig in self.references().filter_map(ProjectReference::tsconfig) {
             if path.starts_with(tsconfig.base_path()) {
-                return tsconfig.resolve_path_alias(specifier);
+                return [tsconfig.resolve_path_alias(specifier), paths].concat();
             }
         }
-        Vec::new()
+        paths
     }
 
     /// Resolves the given `specifier` within the project configured by this

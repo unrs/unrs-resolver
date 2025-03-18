@@ -1,22 +1,22 @@
 name: autofix.ci # For security reasons, the workflow in which the autofix.ci action is used must be named "autofix.ci".
 
-permissions: {}
-
 on:
   pull_request:
-    types: [opened, synchronize]
+    types:
+      - opened
+      - synchronize
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
-  cancel-in-progress: ${{ github.ref_name != 'main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   autofix:
     runs-on: ubuntu-latest
     steps:
-      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+      - uses: taiki-e/checkout-action@v1
 
-      - uses: oxc-project/setup-rust@cd82e1efec7fef815e2c23d296756f31c7cdc03d # v1.0.0
+      - uses: oxc-project/setup-rust@v1.0.0
         with:
           restore-cache: false
           tools: just,cargo-shear@1,dprint
@@ -24,21 +24,21 @@ jobs:
 
       - name: Restore dprint plugin cache
         id: cache-restore
-        uses: actions/cache/restore@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/restore@v4
         with:
           key: dprint-autofix-ci-${{ runner.os }}-${{ hashFiles('dprint.json') }}
           path: ~/.cache/dprint
 
       - run: just fmt
 
-      - uses: autofix-ci/action@2891949f3779a1cafafae1523058501de3d4e944 # v1.3.1
+      - uses: autofix-ci/action@v1
         with:
           fail-fast: false
 
       - name: Save dprint plugin cache
         if: ${{ github.ref_name == 'main' }}
         id: cache-save
-        uses: actions/cache/save@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        uses: actions/cache/save@v4
         with:
           key: ${{ steps.cache-restore.outputs.cache-primary-key }}
           path: ~/.cache/dprint

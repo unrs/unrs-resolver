@@ -52,6 +52,10 @@ impl FileSystem for MemoryFS {
         file.read_to_string(&mut buffer).unwrap();
         Ok(buffer)
     }
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
+        let buf = self.read_to_string(path)?;
+        Ok(buf.into_bytes())
+    }
 
     fn metadata(&self, path: &Path) -> io::Result<FileMetadata> {
         use vfs::FileSystem;
@@ -69,6 +73,10 @@ impl FileSystem for MemoryFS {
     }
 
     fn read_link(&self, _path: &Path) -> io::Result<PathBuf> {
+        Err(io::Error::new(io::ErrorKind::NotFound, "not a symlink"))
+    }
+
+    fn canonicalize(&self, _path: &Path) -> io::Result<PathBuf> {
         Err(io::Error::new(io::ErrorKind::NotFound, "not a symlink"))
     }
 }

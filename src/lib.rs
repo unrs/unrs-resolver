@@ -69,6 +69,8 @@ mod tsconfig_serde;
 #[cfg(test)]
 mod tests;
 
+use dashmap::{DashMap, mapref::one::Ref};
+use rustc_hash::FxHashSet;
 use std::{
     borrow::Cow,
     cmp::Ordering,
@@ -77,8 +79,6 @@ use std::{
     path::{Component, Path, PathBuf},
     sync::Arc,
 };
-
-use rustc_hash::FxHashSet;
 
 #[cfg(feature = "fs_cache")]
 pub use crate::{
@@ -129,6 +129,8 @@ pub type Resolver = ResolverGeneric<FsCache<FileSystemOs>>;
 pub struct ResolverGeneric<C: Cache> {
     options: ResolveOptions,
     cache: Arc<C>,
+    #[cfg(feature = "yarn_pnp")]
+    pnp_cache: Arc<DashMap<FsCachedPath, Option<pnp::Manifest>>>,
 }
 
 impl<C: Cache> fmt::Debug for ResolverGeneric<C> {
@@ -146,19 +148,35 @@ impl<C: Cache + Default> Default for ResolverGeneric<C> {
 impl<C: Cache + Default> ResolverGeneric<C> {
     #[must_use]
     pub fn new(options: ResolveOptions) -> Self {
-        Self { options: options.sanitize(), cache: Arc::new(C::default()) }
+        println!("enable_pnp: {:?}", options.enable_pnp);
+        Self {
+            options: options.sanitize(),
+            cache: Arc::new(C::default()),
+            #[cfg(feature = "yarn_pnp")]
+            pnp_cache: Arc::new(DashMap::default()),
+        }
     }
 }
 
-impl<C: Cache> ResolverGeneric<C> {
+impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
     pub fn new_with_cache(cache: Arc<C>, options: ResolveOptions) -> Self {
-        Self { cache, options: options.sanitize() }
+        Self {
+            cache,
+            options: options.sanitize(),
+            #[cfg(feature = "yarn_pnp")]
+            pnp_cache: Arc::new(DashMap::default()),
+        }
     }
 
     /// Clone the resolver using the same underlying cache.
     #[must_use]
     pub fn clone_with_options(&self, options: ResolveOptions) -> Self {
-        Self { options: options.sanitize(), cache: Arc::clone(&self.cache) }
+        Self {
+            options: options.sanitize(),
+            cache: Arc::clone(&self.cache),
+            #[cfg(feature = "yarn_pnp")]
+            pnp_cache: Arc::clone(&self.pnp_cache),
+        }
     }
 
     /// Returns the options.
@@ -248,7 +266,7 @@ impl<C: Cache> ResolverGeneric<C> {
             Err(err) => {
                 tracing::debug!(options = ?self.options, path = ?directory, specifier = specifier, err = ?err);
             }
-        };
+        }
         r
     }
 
@@ -564,8 +582,17 @@ impl<C: Cache> ResolverGeneric<C> {
             {
                 // b. If "main" is a falsy value, GOTO 2.
                 for main_field in package_json.main_fields(&self.options.main_fields) {
+                    // ref https://github.com/webpack/enhanced-resolve/blob/main/lib/MainFieldPlugin.js#L66-L67
+                    let main_field =
+                        if main_field.starts_with("./") || main_field.starts_with("../") {
+                            Cow::Borrowed(main_field)
+                        } else {
+                            Cow::Owned(format!("./{main_field}"))
+                        };
+
                     // c. let M = X + (json main field)
-                    let cached_path = cached_path.normalize_with(main_field, self.cache.as_ref());
+                    let cached_path =
+                        cached_path.normalize_with(main_field.as_ref(), self.cache.as_ref());
                     // d. LOAD_AS_FILE(M)
                     if let Some(path) = self.load_as_file(&cached_path, ctx)? {
                         return Ok(Some(path));
@@ -725,8 +752,10 @@ impl<C: Cache> ResolverGeneric<C> {
     ) -> ResolveResult<C::Cp> {
         #[cfg(feature = "yarn_pnp")]
         {
-            if let Some(resolved_path) = self.load_pnp(cached_path, specifier, ctx)? {
-                return Ok(Some(resolved_path));
+            if self.options.enable_pnp {
+                if let Some(resolved_path) = self.load_pnp(cached_path, specifier, ctx)? {
+                    return Ok(Some(resolved_path));
+                }
             }
         }
 
@@ -805,41 +834,64 @@ impl<C: Cache> ResolverGeneric<C> {
     }
 
     #[cfg(feature = "yarn_pnp")]
+    fn find_pnp_manifest(&self, cached_path: &C::Cp) -> Ref<'_, C::Cp, Option<pnp::Manifest>> {
+        let entry = self
+            .pnp_cache
+            .entry(cached_path.clone())
+            .or_insert_with(|| pnp::find_pnp_manifest(cached_path.path()).unwrap());
+
+        entry.downgrade()
+    }
+
+    #[cfg(feature = "yarn_pnp")]
     fn load_pnp(
         &self,
         cached_path: &C::Cp,
         specifier: &str,
         ctx: &mut Ctx,
     ) -> Result<Option<C::Cp>, ResolveError> {
-        let Some(pnp_manifest) = &self.options.pnp_manifest else { return Ok(None) };
-        let resolution =
-            pnp::resolve_to_unqualified_via_manifest(pnp_manifest, specifier, cached_path.path());
-        match resolution {
-            Ok(pnp::Resolution::Resolved(path, subpath)) => {
-                let cached_path = self.cache.value(&path);
-                let export_resolution = self.load_package_exports(
-                    specifier,
-                    &subpath.unwrap_or_default(),
-                    &cached_path,
-                    ctx,
-                )?;
-                if export_resolution.is_some() {
-                    return Ok(export_resolution);
-                }
-                let file_or_directory_resolution =
-                    self.load_as_file_or_directory(&cached_path, specifier, ctx)?;
-                if file_or_directory_resolution.is_some() {
-                    return Ok(file_or_directory_resolution);
-                }
-                Err(ResolveError::NotFound(specifier.to_string()))
-            }
+        let pnp_manifest = self.find_pnp_manifest(cached_path);
 
-            Ok(pnp::Resolution::Skipped) => Ok(None),
+        if let Some(pnp_manifest) = pnp_manifest.as_ref() {
+            // `resolve_to_unqualified` requires a trailing slash
+            let mut path = cached_path.to_path_buf();
+            path.push("");
 
-            Err(_) => {
-                // Todo: Add a ResolveError::Pnp variant?
-                Err(ResolveError::NotFound(specifier.to_string()))
+            let resolution =
+                pnp::resolve_to_unqualified_via_manifest(pnp_manifest, specifier, path);
+
+            match resolution {
+                Ok(pnp::Resolution::Resolved(path, subpath)) => {
+                    let cached_path = self.cache.value(&path);
+
+                    let export_resolution = self.load_package_self(&cached_path, specifier, ctx)?;
+                    // can be found in pnp cached folder
+                    if export_resolution.is_some() {
+                        return Ok(export_resolution);
+                    }
+
+                    let inner_request = subpath.map_or_else(
+                        || ".".to_string(),
+                        |mut p| {
+                            p.insert_str(0, "./");
+                            p
+                        },
+                    );
+                    let inner_resolver = self.clone_with_options(self.options().clone());
+
+                    // try as file or directory `path` in the pnp folder
+                    let Ok(inner_resolution) = inner_resolver.resolve(&path, &inner_request) else {
+                        return Err(ResolveError::NotFound(specifier.to_string()));
+                    };
+
+                    Ok(Some(self.cache.value(inner_resolution.path())))
+                }
+
+                Ok(pnp::Resolution::Skipped) => Ok(None),
+                Err(_) => Err(ResolveError::NotFound(specifier.to_string())),
             }
+        } else {
+            Ok(None)
         }
     }
 
@@ -885,7 +937,7 @@ impl<C: Cache> ResolverGeneric<C> {
             {
                 // 6. RESOLVE_ESM_MATCH(MATCH)
                 return self.resolve_esm_match(specifier, &path, ctx);
-            };
+            }
         }
         Ok(None)
     }
@@ -943,6 +995,29 @@ impl<C: Cache> ResolverGeneric<C> {
         if let Some(path) = self.load_as_file_or_directory(cached_path, "", ctx)? {
             return Ok(Some(path));
         }
+
+        let mut path_str = cached_path.path().to_str();
+
+        // 3. If the RESOLVED_PATH contains `?``, it could be a path with query
+        //    so try to resolve it as a file or directory without the query,
+        //    but also `?` is a valid character in a path, so we should try from right to left.
+        while let Some(s) = path_str {
+            if let Some((before, _)) = s.rsplit_once('?') {
+                if (self.load_as_file_or_directory(
+                    &self.cache.value(Path::new(before)),
+                    "",
+                    ctx,
+                )?)
+                .is_some()
+                {
+                    return Ok(Some(cached_path.clone()));
+                }
+                path_str = Some(before);
+            } else {
+                break;
+            }
+        }
+
         // 3. THROW "not found"
         Err(ResolveError::NotFound(specifier.to_string()))
     }
@@ -1134,9 +1209,14 @@ impl<C: Cache> ResolverGeneric<C> {
         };
         let path = cached_path.path();
         let Some(filename) = path.file_name() else { return Ok(None) };
+        let path_without_extension = path.with_extension("");
+
         ctx.with_fully_specified(true);
         for extension in extensions {
-            let cached_path = cached_path.replace_extension(extension, self.cache.as_ref());
+            let mut path_with_extension = path_without_extension.clone().into_os_string();
+            path_with_extension.reserve_exact(extension.len());
+            path_with_extension.push(extension);
+            let cached_path = self.cache.value(Path::new(&path_with_extension));
             if let Some(path) = self.load_alias_or_file(&cached_path, ctx)? {
                 ctx.with_fully_specified(false);
                 return Ok(Some(path));
@@ -1556,8 +1636,8 @@ impl<C: Cache> ResolverGeneric<C> {
                         && !pattern_trailer.contains('*')
                         // 2. If patternTrailer has zero length, or if matchKey ends with patternTrailer and the length of matchKey is greater than or equal to the length of expansionKey, then
                         && (pattern_trailer.is_empty()
-                            || (match_key.len() >= expansion_key.len()
-                                && match_key.ends_with(pattern_trailer)))
+                        || (match_key.len() >= expansion_key.len()
+                        && match_key.ends_with(pattern_trailer)))
                         && Self::pattern_key_compare(best_key, expansion_key).is_gt()
                     {
                         // 1. Let target be the value of matchObj[expansionKey].
@@ -1749,8 +1829,7 @@ impl<C: Cache> ResolverGeneric<C> {
             if separator_index.is_none() || specifier.is_empty() {
                 // valid_package_name = false;
             } else if let Some(index) = &separator_index {
-                separator_index = specifier[*index + 1..]
-                    .as_bytes()
+                separator_index = specifier.as_bytes()[*index + 1..]
                     .iter()
                     .position(|b| *b == b'/')
                     .map(|i| i + *index + 1);

@@ -9,6 +9,13 @@ use pnp::fs::{LruZipCache, VPath, VPathInfo, ZipCache};
 
 /// File System abstraction used for `ResolverGeneric`
 pub trait FileSystem: Send + Sync {
+    /// See [std::fs::read]
+    ///
+    /// # Errors
+    ///
+    /// See [std::fs::read]
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+
     /// See [std::fs::read_to_string]
     ///
     /// # Errors
@@ -50,6 +57,18 @@ pub trait FileSystem: Send + Sync {
     ///
     /// See [std::fs::read_link]
     fn read_link(&self, path: &Path) -> io::Result<PathBuf>;
+
+    /// See [std::fs::canonicalize]
+    ///
+    /// # Errors
+    ///
+    /// See [std::fs::read_link]
+    /// ## Warning
+    /// Use `&Path` instead of a generic `P: AsRef<Path>` here,
+    /// because object safety requirements, it is especially useful, when
+    /// you want to store multiple `dyn FileSystem` in a `Vec` or use a `ResolverGeneric<Fs>` in
+    /// napi env.
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf>;
 }
 
 /// Metadata information about a file
@@ -95,9 +114,24 @@ impl From<fs::Metadata> for FileMetadata {
     }
 }
 
+pub struct FileSystemOptions {
+    #[cfg(feature = "yarn_pnp")]
+    pub enable_pnp: bool,
+}
+
+impl Default for FileSystemOptions {
+    fn default() -> Self {
+        Self {
+            #[cfg(feature = "yarn_pnp")]
+            enable_pnp: true,
+        }
+    }
+}
+
 /// Operating System
-#[cfg(feature = "yarn_pnp")]
 pub struct FileSystemOs {
+    options: FileSystemOptions,
+    #[cfg(feature = "yarn_pnp")]
     pnp_lru: LruZipCache<Vec<u8>>,
 }
 
@@ -106,12 +140,10 @@ pub struct FileSystemOs;
 
 impl Default for FileSystemOs {
     fn default() -> Self {
-        cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                Self { pnp_lru: LruZipCache::new(50, pnp::fs::open_zip_via_read_p) }
-            } else {
-                Self
-            }
+        Self {
+            options: FileSystemOptions::default(),
+            #[cfg(feature = "yarn_pnp")]
+            pnp_lru: LruZipCache::new(50, pnp::fs::open_zip_via_read_p),
         }
     }
 }
@@ -182,21 +214,38 @@ impl FileSystemOs {
     }
 }
 
+fn buffer_to_string(bytes: Vec<u8>) -> io::Result<String> {
+    // `simdutf8` is faster than `std::str::from_utf8` which `fs::read_to_string` uses internally
+    if simdutf8::basic::from_utf8(&bytes).is_err() {
+        // Same error as `fs::read_to_string` produces (`io::Error::INVALID_UTF8`)
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stream did not contain valid UTF-8",
+        ));
+    }
+    // SAFETY: `simdutf8` has ensured it's a valid UTF-8 string
+    Ok(unsafe { String::from_utf8_unchecked(bytes) })
+}
+
 impl FileSystem for FileSystemOs {
-    fn read_to_string(&self, path: &Path) -> io::Result<String> {
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                match VPath::from(path)? {
-                    VPath::Zip(info) => {
-                        self.pnp_lru.read_to_string(info.physical_base_path(), info.zip_path)
-                    }
-                    VPath::Virtual(info) => Self::read_to_string(&info.physical_base_path()),
-                    VPath::Native(path) => Self::read_to_string(&path),
+          if #[cfg(feature = "yarn_pnp")] {
+            if self.options.enable_pnp {
+                return match VPath::from(path)? {
+                    VPath::Zip(info) => self.pnp_lru.read(info.physical_base_path(), info.zip_path),
+                    VPath::Virtual(info) => std::fs::read(info.physical_base_path()),
+                    VPath::Native(path) => std::fs::read(&path),
                 }
-            } else {
-                Self::read_to_string(path)
             }
-        }
+        }}
+
+        std::fs::read(path)
+    }
+
+    fn read_to_string(&self, path: &Path) -> io::Result<String> {
+        let buffer = self.read(path)?;
+        buffer_to_string(buffer)
     }
 
     fn metadata(&self, path: &Path) -> io::Result<FileMetadata> {
@@ -231,6 +280,61 @@ impl FileSystem for FileSystemOs {
                 }
             } else {
                 Self::read_link(path)
+            }
+        }
+    }
+
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        cfg_if! {
+            if #[cfg(feature = "yarn_pnp")] {
+                if self.options.enable_pnp {
+                    return match VPath::from(path)? {
+                        VPath::Zip(info) => {
+                            dunce::canonicalize(info.physical_base_path().join(info.zip_path))
+                        }
+                        VPath::Virtual(info) => dunce::canonicalize(info.physical_base_path()),
+                        VPath::Native(path) => dunce::canonicalize(path),
+                    }
+            }
+            }
+        }
+
+        cfg_if! {
+            if #[cfg(not(target_os = "wasi"))]{
+                dunce::canonicalize(path)
+            } else {
+                use std::path::Component;
+                let mut path_buf = path.to_path_buf();
+                loop {
+                    let link = fs::read_link(&path_buf)?;
+                    path_buf.pop();
+                    for component in link.components() {
+                        match component {
+                            Component::ParentDir => {
+                                path_buf.pop();
+                            }
+                            Component::Normal(seg) => {
+                                #[cfg(target_family = "wasm")]
+                                // Need to trim the extra \0 introduces by https://github.com/nodejs/uvwasi/issues/262
+                                {
+                                    path_buf.push(seg.to_string_lossy().trim_end_matches('\0'));
+                                }
+                                #[cfg(not(target_family = "wasm"))]
+                                {
+                                    path_buf.push(seg);
+                                }
+                            }
+                            Component::RootDir => {
+                                path_buf = PathBuf::from("/");
+                            }
+                            Component::CurDir | Component::Prefix(_) => {}
+                        }
+                    }
+                    if !fs::symlink_metadata(&path_buf)?.is_symlink() {
+                        break;
+                    }
+                }
+                Ok(path_buf)
             }
         }
     }
