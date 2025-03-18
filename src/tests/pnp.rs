@@ -94,7 +94,6 @@ fn resolve_pnp_pkg_should_failed_while_disable_pnp_mode() {
     );
 }
 
-
 #[test]
 fn resolve_package_deep_link() {
     let fixture = super::fixture_root().join("pnp");
