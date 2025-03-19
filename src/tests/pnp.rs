@@ -103,10 +103,10 @@ fn resolve_pnp_pkg_should_failed_while_disable_pnp_mode() {
 fn resolve_package_deep_link() {
     let fixture = super::fixture_root().join("pnp");
 
-    let resolver = Resolver::new(ResolveOptions { ..ResolveOptions::default() });
+    let resolver = Resolver::new(ResolveOptions::default());
 
     assert_eq!(
-        resolver.resolve(&fixture.join("shared"), "beachball/lib/commands/bump.js").map(|r| r.full_path()),
+        resolver.resolve(fixture.join("shared"), "beachball/lib/commands/bump.js").map(|r| r.full_path()),
         Ok(fixture.join(
           ".yarn/cache/beachball-npm-2.51.0-65bc162b4f-05a8be5dde.zip/node_modules/beachball/lib/commands/bump.js"
       )),

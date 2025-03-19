@@ -850,7 +850,7 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
         let pnp_manifest = self.find_pnp_manifest(cached_path);
 
         if let Some(pnp_manifest) = pnp_manifest.as_ref() {
-            // "pnpapi" in a PnP builtin module
+            // "pnpapi" in a P'n'P builtin module
             if specifier == "pnpapi" {
                 return Ok(Some(self.cache.value(pnp_manifest.manifest_path.as_path())));
             }
@@ -871,10 +871,7 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
                     let pkg_name = cached_path_string.rsplit_once("node_modules/").map_or(
                         "",
                         // remove trailing slash
-                        |last| {
-                            let p = last.1;
-                            if p.ends_with("/") { &p[..p.len() - 1] } else { p }
-                        },
+                        |last| last.1.strip_suffix("/").unwrap_or(last.1),
                     );
 
                     let inner_request = if pkg_name.is_empty() {
