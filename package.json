@@ -10,8 +10,8 @@
     "url": "https://github.com/sponsors/Boshen"
   },
   "scripts": {
-    "build": "napi build --platform --release --package-json-path npm/package.json --manifest-path napi/Cargo.toml",
-    "build:debug": "napi build --platform --package-json-path npm/package.json --manifest-path napi/Cargo.toml",
+    "build": "napi build --platform --release --strip --package-json-path npm/package.json --manifest-path napi/Cargo.toml",
+    "build:debug": "napi build --platform --strip --package-json-path npm/package.json --manifest-path napi/Cargo.toml",
     "prepublishOnly": "napi pre-publish -t npm",
     "test": "vitest run -r ./napi"
   },
