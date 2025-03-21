@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.2.2...unrspack-resolver-v1.3.0) - 2025-03-21
+
+### Features
+
+- enable more targets ([#29](https://github.com/unrs/rspack-resolver/pull/29))
+
 ## [1.2.2](https://github.com/unrs/rspack-resolver/compare/unrspack-resolver-v1.2.1...unrspack-resolver-v1.2.2) - 2025-03-19
 
 ### <!-- 1 -->Bug Fixes
