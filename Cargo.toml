@@ -79,7 +79,7 @@ rustc-hash = { version = "2.0.0", default-features = false, features = ["std"] }
 serde = { version = "1.0.203", features = ["derive"], optional = true } # derive for Deserialize from package.json
 serde_json = { version = "1.0.117", features = ["preserve_order"], optional = true } # preserve_order: package_json.exports requires order such as `["require", "import", "default"]`
 simdutf8 = { version = "0.1.4", features = ["aarch64_neon"] }
-thiserror = "1.0.69"
+thiserror = "2.0.12"
 tracing = "0.1.40"
 
 pnp = { version = "0.9.1", optional = true }
