@@ -7,7 +7,7 @@
     "url": "https://github.com/unrs/rspack-resolver.git"
   },
   "funding": {
-    "url": "https://github.com/sponsors/Boshen"
+    "url": "https://github.com/sponsors/JounQin"
   },
   "scripts": {
     "build": "napi build --platform --release --strip --package-json-path npm/package.json --manifest-path napi/Cargo.toml",

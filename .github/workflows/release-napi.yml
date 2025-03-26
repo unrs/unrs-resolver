@@ -10,7 +10,11 @@ on:
   pull_request: null
 
 env:
-  DEBUG: "napi:*"
+  DEBUG: napi:*
+  APP_NAME: rspack-resolver
+  OXC_LOG: debug
+  MACOSX_DEPLOYMENT_TARGET: 10.13
+  CC: clang
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -81,21 +85,13 @@ jobs:
             build: pnpm build -x
           - os: ubuntu-latest
             target: riscv64gc-unknown-linux-gnu
-            setup: |
-              sudo apt-get update
-              sudo apt-get install gcc-riscv64-linux-gnu -y
-              echo "CXX=riscv64-linux-gnu-gcc" >> $GITHUB_ENV
-            build: pnpm build --use-napi-cross
+            build: export CFLAGS="-fuse-ld=lld" && pnpm build --use-napi-cross
           - os: ubuntu-latest
             target: powerpc64le-unknown-linux-gnu
             build: pnpm build --use-napi-cross
           - os: ubuntu-latest
             target: s390x-unknown-linux-gnu
-            setup: |
-              sudo apt-get update
-              sudo apt-get install gcc-s390x-linux-gnu -y
-              echo "CXX=s390x-linux-gnu-gcc" >> $GITHUB_ENV
-            build: pnpm build
+            build: export CFLAGS="-fuse-ld=lld" && pnpm build --use-napi-cross
           - os: macos-latest
             target: x86_64-apple-darwin
             build: pnpm build
@@ -123,23 +119,16 @@ jobs:
           version: 0.13.0
 
       - name: Install cargo-zigbuild
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@5651179950649c44da31d346537e20c0534f0f25 # v2
         if: ${{ contains(matrix.target, 'musl') }}
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           tool: cargo-zigbuild
 
-      - name: Setup toolchain
-        if: ${{ matrix.setup }}
-        run: ${{ matrix.setup }}
-        shell: bash
-
       - name: Build
         run: ${{ matrix.build }} --target ${{ matrix.target }}
         shell: bash
-        env:
-          CC: ${{ matrix.target != 'riscv64gc-unknown-linux-gnu' && matrix.target != 's390x-unknown-linux-gnu' && 'clang' || '' }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -165,7 +154,7 @@ jobs:
           RUSTUP_IO_THREADS: 1
         with:
           operating_system: freebsd
-          version: "14.0"
+          version: "14.2"
           memory: 8G
           cpu_count: 3
           environment_variables: "DEBUG RUSTUP_IO_THREADS"
