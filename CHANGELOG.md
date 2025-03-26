@@ -6,6 +6,238 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/unrs/unrs-resolver/compare/unrs_resolver-v1.3.0...unrs_resolver-v2.0.0) - 2025-03-26
+
+### <!-- 0 -->Features
+
+- *(napi)* add mimalloc ([#423](https://github.com/unrs/unrs-resolver/pull/423)) ([#18](https://github.com/unrs/unrs-resolver/pull/18))
+- merge from upstream `oxc-project/oxc-resolver` ([#15](https://github.com/unrs/unrs-resolver/pull/15))
+- support resolving path with extra query ([#7](https://github.com/unrs/unrs-resolver/pull/7))
+- *(pnp)* support link ([#49](https://github.com/unrs/unrs-resolver/pull/49))
+- Revert  vfs logic ([#44](https://github.com/unrs/unrs-resolver/pull/44))
+- expose PnpFileSystem ([#43](https://github.com/unrs/unrs-resolver/pull/43))
+- pub read api ([#41](https://github.com/unrs/unrs-resolver/pull/41))
+- rebase and refine extension-alias error format ([#30](https://github.com/unrs/unrs-resolver/pull/30))
+- pub all FileMetadata field ([#27](https://github.com/unrs/unrs-resolver/pull/27))
+- remove send + sync constraint ([#25](https://github.com/unrs/unrs-resolver/pull/25))
+- rebase latest oxc-resolver and support pnp ([#12](https://github.com/unrs/unrs-resolver/pull/12))
+- *(napi)* add tracing via `OXC_LOG:DEBUG` ([#202](https://github.com/unrs/unrs-resolver/pull/202))
+- strip symbols and enable LTO ([#197](https://github.com/unrs/unrs-resolver/pull/197))
+- export package.json `type` and `sideEffects` field by default for bundlers ([#196](https://github.com/unrs/unrs-resolver/pull/196))
+- *(napi)* add async API ([#191](https://github.com/unrs/unrs-resolver/pull/191))
+- [**breaking**] remove the constraint on packages exports `default` must be the last one ([#171](https://github.com/unrs/unrs-resolver/pull/171))
+- [**breaking**] return `ResolveError:Builtin("node:{specifier}")` from package imports and exports ([#165](https://github.com/unrs/unrs-resolver/pull/165))
+- add `imports_fields` option ([#138](https://github.com/unrs/unrs-resolver/pull/138))
+- substitute path that starts with `${configDir}/` in tsconfig.compilerOptions.paths ([#136](https://github.com/unrs/unrs-resolver/pull/136))
+- allow `Resolver<Box<dyn FileSystem>>` by removing unnecessary `Default` constraint ([#116](https://github.com/unrs/unrs-resolver/pull/116))
+- add more builder functions for options ([#110](https://github.com/unrs/unrs-resolver/pull/110))
+- add feature `package_json_raw_json_api` for returning package's raw json ([#104](https://github.com/unrs/unrs-resolver/pull/104))
+- support tsconfig#extends array ([#102](https://github.com/unrs/unrs-resolver/pull/102))
+- more builder pattern options ([#84](https://github.com/unrs/unrs-resolver/pull/84))
+- functions to add more options using builder pattern ([#81](https://github.com/unrs/unrs-resolver/pull/81))
+- *(napi)* support wasi target ([#31](https://github.com/unrs/unrs-resolver/pull/31))
+- add file_dependencies and missing_dependencies API ([#50](https://github.com/unrs/unrs-resolver/pull/50))
+- add context to PackageImportNotDefined error
+- improve errors by adding more contexts
+- *(napi)* expose cloneWithOptions and clearCache methods ([#40](https://github.com/unrs/unrs-resolver/pull/40))
+- clean up the error message todos ([#38](https://github.com/unrs/unrs-resolver/pull/38))
+- return not found when recursing non-existent file ([#36](https://github.com/unrs/unrs-resolver/pull/36))
+- *(napi)* update the doc and type for tsconfig references ([#24](https://github.com/unrs/unrs-resolver/pull/24))
+- *(napi)* add options ([#19](https://github.com/unrs/unrs-resolver/pull/19))
+- *(resolver)* add a `realpath` to package.json ([#1634](https://github.com/unrs/unrs-resolver/pull/1634))
+- *(resovler)* impl Into for IOError ([#1223](https://github.com/unrs/unrs-resolver/pull/1223))
+- *(resolver)* strip trailling commas from tsconfig.json ([#1198](https://github.com/unrs/unrs-resolver/pull/1198))
+- *(resolver)* configurable tsconfig project references ([#965](https://github.com/unrs/unrs-resolver/pull/965))
+- *(resolver)* add more tracing events to resolver ([#907](https://github.com/unrs/unrs-resolver/pull/907))
+- *(resolver)* add TsconfigNotFound error ([#905](https://github.com/unrs/unrs-resolver/pull/905))
+- *(resolver)* add tracing-subscriber feature ([#904](https://github.com/unrs/unrs-resolver/pull/904))
+- *(resolver)* tsconfig project references ([#862](https://github.com/unrs/unrs-resolver/pull/862))
+- *(resolver)* add thiserror ([#847](https://github.com/unrs/unrs-resolver/pull/847))
+- *(resolver)* add tracing example
+- *(resolver)* add an option to turn off builtin_modules ([#833](https://github.com/unrs/unrs-resolver/pull/833))
+- *(resolver)* check for node.js core modules ([#794](https://github.com/unrs/unrs-resolver/pull/794))
+- *(resolver)* implement nested alias field ([#795](https://github.com/unrs/unrs-resolver/pull/795))
+- *(resolver)* implement tsconfig-paths ([#750](https://github.com/unrs/unrs-resolver/pull/750))
+- *(resolver)* handle path alias with `#` ([#739](https://github.com/unrs/unrs-resolver/pull/739))
+- *(resolver)* expose raw package_json value; improve print debug ([#738](https://github.com/unrs/unrs-resolver/pull/738))
+- *(resolver)* implement configurable `exports_fields` option ([#733](https://github.com/unrs/unrs-resolver/pull/733))
+- *(resolver)* resolve `#` as path instead of a fragment ([#727](https://github.com/unrs/unrs-resolver/pull/727))
+- *(resolver)* pass on query string from alias fields
+- *(resolver)* complete browser_field implementation
+- *(resolver)* check for infinite recursion ([#714](https://github.com/unrs/unrs-resolver/pull/714))
+- *(resolver)* implement `main_fields`
+- *(resolver)* add `exports_fields` and `main_fields` for logging purposes.
+- *(resolver)* add tracing ([#710](https://github.com/unrs/unrs-resolver/pull/710))
+- *(resolver)* implement recursive alias, file as alias and exports field with query / fragment ([#695](https://github.com/unrs/unrs-resolver/pull/695))
+- *(resolver)* implement resolveToContext ([#694](https://github.com/unrs/unrs-resolver/pull/694))
+- *(resolver)* implement restrictions (path only) ([#693](https://github.com/unrs/unrs-resolver/pull/693))
+- *(resolver)* implement the basics of ESM ([#691](https://github.com/unrs/unrs-resolver/pull/691))
+- *(resolver)* implement fully specified ([#687](https://github.com/unrs/unrs-resolver/pull/687))
+- *(resolver)* imports field ([#681](https://github.com/unrs/unrs-resolver/pull/681))
+- *(resolver)* finish most of exports field ([#674](https://github.com/unrs/unrs-resolver/pull/674))
+- *(resolver)* port the rest of the exports field tests ([#659](https://github.com/unrs/unrs-resolver/pull/659))
+- *(resolver)* implement more of exports field ([#648](https://github.com/unrs/unrs-resolver/pull/648))
+- *(resolver)* initialize implementation of package.json exports field ([#630](https://github.com/unrs/unrs-resolver/pull/630))
+- *(resolver)* check for directory before loading a directory ([#590](https://github.com/unrs/unrs-resolver/pull/590))
+- *(resolver)* implement symlinks ([#582](https://github.com/unrs/unrs-resolver/pull/582))
+- *(resolver)* complete query and fragment parsing ([#579](https://github.com/unrs/unrs-resolver/pull/579))
+- *(resolver)* add preferRelative and preferAbsolute ([#577](https://github.com/unrs/unrs-resolver/pull/577))
+- *(resolver)* implement roots ([#576](https://github.com/unrs/unrs-resolver/pull/576))
+- *(resolver)* implement fallback ([#572](https://github.com/unrs/unrs-resolver/pull/572))
+- *(resolver)* implement enforceExtension ([#567](https://github.com/unrs/unrs-resolver/pull/567))
+- *(resolver)* implement enforceExtension ([#566](https://github.com/unrs/unrs-resolver/pull/566))
+- *(resolver)* implement descriptionFiles option ([#565](https://github.com/unrs/unrs-resolver/pull/565))
+- *(resolver)* implement the basics of path alias ([#564](https://github.com/unrs/unrs-resolver/pull/564))
+- *(resolver)* accept different file system implementations ([#562](https://github.com/unrs/unrs-resolver/pull/562))
+- *(resolver)* implement browser field ([#561](https://github.com/unrs/unrs-resolver/pull/561))
+- *(resolver)* implement scoped packages ([#558](https://github.com/unrs/unrs-resolver/pull/558))
+- *(resolver)* port incorrect description file test ([#557](https://github.com/unrs/unrs-resolver/pull/557))
+- *(resolver)* implement extension_alias ([#556](https://github.com/unrs/unrs-resolver/pull/556))
+- *(resolver)* port resolve tests ([#555](https://github.com/unrs/unrs-resolver/pull/555))
+- *(resolver)* resolve extensions ([#549](https://github.com/unrs/unrs-resolver/pull/549))
+- *(resolver)* resolve as module ([#544](https://github.com/unrs/unrs-resolver/pull/544))
+- *(resolver)* resolve js file ([#543](https://github.com/unrs/unrs-resolver/pull/543))
+- *(resolver)* add resolver test fixtures ([#542](https://github.com/unrs/unrs-resolver/pull/542))
+
+### <!-- 1 -->Bug Fixes
+
+- *(pnp)* support `pnpapi` core module and package deep link ([#24](https://github.com/unrs/unrs-resolver/pull/24))
+- references should take higher priority ([#13](https://github.com/unrs/unrs-resolver/pull/13))
+- takes paths and references into account at the same time
+- should always try resolve_path_alias
+- abs path in main fields ([#52](https://github.com/unrs/unrs-resolver/pull/52))
+- 🐛 pnp feat respect options.enable_pnp ([#47](https://github.com/unrs/unrs-resolver/pull/47))
+- alias match request end with slash ([#35](https://github.com/unrs/unrs-resolver/pull/35))
+- resolve mathjs error when using `extensionAlias` ([#31](https://github.com/unrs/unrs-resolver/pull/31))
+- fix symbol link support in pnpm workspace ([#21](https://github.com/unrs/unrs-resolver/pull/21))
+- fallback to next main field when resolve failed ([#17](https://github.com/unrs/unrs-resolver/pull/17))
+- tsconfig project reference it self should throw error ([#211](https://github.com/unrs/unrs-resolver/pull/211))
+- comment ([#179](https://github.com/unrs/unrs-resolver/pull/179))
+- alias value should try fragment as path ([#172](https://github.com/unrs/unrs-resolver/pull/172))
+- alias not found should return error ([#168](https://github.com/unrs/unrs-resolver/pull/168))
+- RootsPlugin debug_assert on windows ([#145](https://github.com/unrs/unrs-resolver/pull/145))
+- RootsPlugin should fall through if it fails to resolve the roots ([#144](https://github.com/unrs/unrs-resolver/pull/144))
+- lazily read package.json.exports for shared resolvers ([#137](https://github.com/unrs/unrs-resolver/pull/137))
+- incorrect resolution when using shared resolvers with different `main_fields` ([#134](https://github.com/unrs/unrs-resolver/pull/134))
+- canonicalize is not supported on wasi target ([#124](https://github.com/unrs/unrs-resolver/pull/124))
+- missing `Debug` for `Specifier`
+- windows path with C:// like prefixes ([#92](https://github.com/unrs/unrs-resolver/pull/92))
+- extending tsconfig paths with baseUrl in original tsconfig file ([#91](https://github.com/unrs/unrs-resolver/pull/91))
+- specifier with multiple `?` ([#83](https://github.com/unrs/unrs-resolver/pull/83))
+- tsconfig#extends must be a string ([#80](https://github.com/unrs/unrs-resolver/pull/80))
+- normalize aliased path ([#78](https://github.com/unrs/unrs-resolver/pull/78))
+- panic when `?` is passed in ([#70](https://github.com/unrs/unrs-resolver/pull/70))
+- resolve "browser" field when "exports" is present ([#59](https://github.com/unrs/unrs-resolver/pull/59))
+- returning broken missing dependencies when alias and extensions are provided ([#54](https://github.com/unrs/unrs-resolver/pull/54))
+- change ResolveError::NotFound(PathBuf) to report specifier
+- make raw_json return `&Arc<serde_json::Value>`
+- browser field resolving relative to path to itself ([#34](https://github.com/unrs/unrs-resolver/pull/34))
+- *(justfile)* fix example command
+- *(resolver)* resolve query and fragments with unicode filenames ([#1591](https://github.com/unrs/unrs-resolver/pull/1591))
+- *(resolver)* make sure package.json path is inside the resolved path ([#1481](https://github.com/unrs/unrs-resolver/pull/1481))
+- *(resolver)* resolve tsconfig extend that are extensionless ([#971](https://github.com/unrs/unrs-resolver/pull/971))
+- *(resolver)* log error as debug so it does not print the error by default
+- *(resolver)* fix tsconfig lookup when a directory is provided ([#900](https://github.com/unrs/unrs-resolver/pull/900))
+- *(resolver)* fix collision on hash entries ([#850](https://github.com/unrs/unrs-resolver/pull/850))
+- *(resolver)* fix a case where ignored package has a fallback ([#837](https://github.com/unrs/unrs-resolver/pull/837))
+- *(resolver)* fix a case where an alias is part of a dashed package name ([#836](https://github.com/unrs/unrs-resolver/pull/836))
+- *(resolver)* fix cases with conflicting node_modules path ([#835](https://github.com/unrs/unrs-resolver/pull/835))
+- *(resolver)* add test case for resolve_to_context ([#834](https://github.com/unrs/unrs-resolver/pull/834))
+- *(resolver)* resolve exports field that are directories ([#820](https://github.com/unrs/unrs-resolver/pull/820))
+- *(resolver)* fix resolving package_self with the correct subpath
+- *(resolver)* correct behavior for enforceExtension
+- *(resolver)* do not resolve browser field that are strings ([#816](https://github.com/unrs/unrs-resolver/pull/816))
+- *(resolver)* make sure package name is valid when loading package self ([#810](https://github.com/unrs/unrs-resolver/pull/810))
+- *(resolver)* fix a case where package name and specifier is the wrong order
+- *(resolver)* add a case with multi-dot filename
+- *(resolver)* add `derive` to serde
+- *(resolver)* fix a case with multi-dot file extensions ([#704](https://github.com/unrs/unrs-resolver/pull/704))
+- *(resolver)* fix resolver benchmark
+
+### <!-- 2 -->Performance
+
+- skip resolving extension alias when `options.extension_alias` is empty ([#203](https://github.com/unrs/unrs-resolver/pull/203))
+- improve call to `Path::ends_with` ([#199](https://github.com/unrs/unrs-resolver/pull/199))
+- skip searching for package.json when `alias_fields` is not provided ([#194](https://github.com/unrs/unrs-resolver/pull/194))
+- *(resolver)* remove extra large fields from raw package json ([#23](https://github.com/unrs/unrs-resolver/pull/23))
+- *(resolver)* do not search for package.json inside non-existing directories ([#1480](https://github.com/unrs/unrs-resolver/pull/1480))
+- *(resolver)* use system canonicalize to reduce total number of path hashes ([#902](https://github.com/unrs/unrs-resolver/pull/902))
+- *(resolver)* used cached node_modules in `package_resolve` ([#901](https://github.com/unrs/unrs-resolver/pull/901))
+- *(resolver)* do not search inside non-existent directories for scoped packages ([#899](https://github.com/unrs/unrs-resolver/pull/899))
+- *(resolver)* avoid double hashing by memoizing the hash ([#871](https://github.com/unrs/unrs-resolver/pull/871))
+- *(resolver)* optimize canonicalize ([#870](https://github.com/unrs/unrs-resolver/pull/870))
+- *(resolver)* cache `node_modules` lookup ([#869](https://github.com/unrs/unrs-resolver/pull/869))
+- *(resolver)* stop descending into node_modules when possible ([#821](https://github.com/unrs/unrs-resolver/pull/821))
+- *(resolver)* reduce memory allocation when resolving node_modules ([#608](https://github.com/unrs/unrs-resolver/pull/608))
+- *(resolver)* hash once for the `get` + `insert` case ([#606](https://github.com/unrs/unrs-resolver/pull/606))
+- *(resolver)* allocate less when resolving extensions ([#603](https://github.com/unrs/unrs-resolver/pull/603))
+- *(resolver)* reduce the total number of hashes by passing the cached value around ([#602](https://github.com/unrs/unrs-resolver/pull/602))
+- *(resolver)* do not read package_json of a file ([#601](https://github.com/unrs/unrs-resolver/pull/601))
+- *(resolver)* improve cache hit for package.json ([#585](https://github.com/unrs/unrs-resolver/pull/585))
+- *(resolver)* cache canonicalized path ([#584](https://github.com/unrs/unrs-resolver/pull/584))
+- *(resolver)* use `fs::symlink_metadata`, which doesn't traverse symlinks ([#581](https://github.com/unrs/unrs-resolver/pull/581))
+- *(resolver)* cache all package.json queries ([#569](https://github.com/unrs/unrs-resolver/pull/569))
+- *(resolver)* use rustc_hash::FxHasher for DashMap ([#568](https://github.com/unrs/unrs-resolver/pull/568))
+- *(resolver)* add file system cache ([#547](https://github.com/unrs/unrs-resolver/pull/547))
+
+### <!-- 3 -->Documentation
+
+- document feature flags
+- improve terminology and clarify contexts ([#118](https://github.com/unrs/unrs-resolver/pull/118))
+- *(README)* add errors section
+- document `specifier` and `path` for `resolve`
+- remove some periods
+
+### <!-- 4 -->Refactor
+
+- add test cases for resolve alias value with fragment ([#170](https://github.com/unrs/unrs-resolver/pull/170))
+- improve `normalize_with` function ([#153](https://github.com/unrs/unrs-resolver/pull/153))
+- remove `PartialEq` and `Eq` from `Specifier` ([#148](https://github.com/unrs/unrs-resolver/pull/148))
+- avoid an extra allocation in `load_extensions`
+- remove the browser field lookup in `resolve_esm_match` ([#141](https://github.com/unrs/unrs-resolver/pull/141))
+- remove the extra `condition_names` from `package_exports_resolve`
+- deserialize less values in tsconfig ([#109](https://github.com/unrs/unrs-resolver/pull/109))
+- selectively parse package_json fields instead of parsing everything ([#103](https://github.com/unrs/unrs-resolver/pull/103))
+- increase some codecov
+- use the same const for slash start '/' and '\\'
+- improve code code coverage ([#67](https://github.com/unrs/unrs-resolver/pull/67))
+- s/ResolveContext/Ctx for inner usage
+- add a `resolve_tracing` method
+- move ResolveContext to its own file
+- s/ResolveState/ResolveResult
+- use FxHashMap instead of FxIndexMap for BrowserField ([#33](https://github.com/unrs/unrs-resolver/pull/33))
+- tweak the load_browser_field API
+- remove some unnecessary trace information
+- *(resolver)* do not search for package.json inside non-existing directories ([#1482](https://github.com/unrs/unrs-resolver/pull/1482))
+- *(rust)* move to workspace lint table ([#1444](https://github.com/unrs/unrs-resolver/pull/1444))
+- *(clippy)* allow clippy::too_many_lines
+- *(clippy)* allow struct_excessive_bools
+- *(resolver)* move tests folder to fixtures ([#964](https://github.com/unrs/unrs-resolver/pull/964))
+- *(resolver)* clean up `load_alias` ([#875](https://github.com/unrs/unrs-resolver/pull/875))
+- *(resolver)* remove unnecessary `RefCell` ([#849](https://github.com/unrs/unrs-resolver/pull/849))
+- *(benchmark)* use codspeed for all benchmarks ([#839](https://github.com/unrs/unrs-resolver/pull/839))
+- *(resolver)* remove nodejs_resolver comparison
+- improve code coverage a little bit
+- improve code coverage in various places ([#721](https://github.com/unrs/unrs-resolver/pull/721))
+- *(resolver)* remove the leading dot trim on extensions
+- *(resolver)* clean up some code and tests
+- *(resolver)* clean up the tests a little bit
+- *(resolver)* remove the identity-hash crate
+- *(resolver)* add a EnforceExtension tri state
+- *(resolver)* make Resolution::full_path not owned
+- *(resolver)* return package json error immediately instead of saving it ([#702](https://github.com/unrs/unrs-resolver/pull/702))
+- *(resolver)* improve code by looking at the code coverage ([#697](https://github.com/unrs/unrs-resolver/pull/697))
+- *(resolver)* clean some code ([#692](https://github.com/unrs/unrs-resolver/pull/692))
+- *(resolver)* change internal funcs to non-pub by moving to unit tests ([#682](https://github.com/unrs/unrs-resolver/pull/682))
+- *(resolver)* use DashSet for the cache ([#605](https://github.com/unrs/unrs-resolver/pull/605))
+- *(resolver)* make the global cache hold less memory ([#593](https://github.com/unrs/unrs-resolver/pull/593))
+- *(resolver)* improve browser_field lookup ([#592](https://github.com/unrs/unrs-resolver/pull/592))
+- *(resolver)* s/request_str/request
+- *(resolver)* improve how browser field is resolved ([#589](https://github.com/unrs/unrs-resolver/pull/589))
+- *(resolver)* check against Result for better assertion message ([#573](https://github.com/unrs/unrs-resolver/pull/573))
+- *(resolver)* add our own path util for normalization
+- *(resolver)* add oxc_resolver crate
+
 ## [1.3.0](https://github.com/unrs/unrs-resolver/compare/unrspack-resolver-v1.2.2...unrspack-resolver-v1.3.0) - 2025-03-21
 
 ### Features
