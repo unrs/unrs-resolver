@@ -84,9 +84,6 @@ jobs:
             target: armv7-unknown-linux-musleabihf
             build: pnpm build -x
           - os: ubuntu-latest
-            target: riscv64gc-unknown-linux-gnu
-            build: export CFLAGS="-fuse-ld=lld" && pnpm build --use-napi-cross
-          - os: ubuntu-latest
             target: powerpc64le-unknown-linux-gnu
             build: pnpm build --use-napi-cross
           - os: ubuntu-latest
