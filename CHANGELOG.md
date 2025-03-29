@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.3](https://github.com/unrs/unrs-resolver/compare/v1.3.2...v1.3.3) - 2025-03-29
 
+### Build
+
+- build: remove `--strip` flag ([#44](https://github.com/unrs/unrs-resolver/pull/44))
+
 ### <!-- 6 -->Testing
 
 - add nested package json case ([#40](https://github.com/unrs/unrs-resolver/pull/40))
