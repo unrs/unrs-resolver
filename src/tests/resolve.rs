@@ -121,8 +121,7 @@ fn resolve_hash_as_module() {
 #[test]
 fn resolve_nested_dir_with_package_json() {
     let f = super::fixture_root().join("misc/nested-package-json");
-    let resolver =
-        Resolver::new(ResolveOptions::default());
+    let resolver = Resolver::new(ResolveOptions::default());
 
     #[rustfmt::skip]
     let data = [
