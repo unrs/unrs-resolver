@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/unrs/unrs-resolver/compare/v1.4.1...v2.0.0) - 2025-04-11
+
+### <!-- 0 -->Features
+
+- merge from upstream `oxc-project/oxc-resolver` - 3rd ([#58](https://github.com/unrs/unrs-resolver/pull/58))
+
 ## [1.4.1](https://github.com/unrs/unrs-resolver/compare/v1.4.0...v1.4.1) - 2025-04-07
 
 ### <!-- 4 -->Refactor
