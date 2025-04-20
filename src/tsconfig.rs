@@ -226,55 +226,54 @@ pub trait TsConfig: Sized + Debug {
         let paths = paths_map.get(specifier).map_or_else(
             // Special handling for a dot‑alias mapping like `"." => ["."]`
             if paths_map.contains_key(".") {
-            let dot_paths = &paths_map["."];
-            return dot_paths
-                .iter()
-                .map(|p| {
-                    // p == "." means “use the specifier itself”
-                    let mut path = if p == "." {
-                        specifier.to_string()
-                    } else {
-                        let mut s = p.clone();
-                        s.push('/');
-                        s.push_str(specifier);
-                        s
-                    };
-                    compiler_options.paths_base().normalize_with(path)
-                })
-                .chain(base_url_iter)
-                .collect();
-            }
-
-            || {
+                let dot_paths = &paths_map["."];
+                return dot_paths
+                    .iter()
+                    .map(|p| {
+                        // p == "." means “use the specifier itself”
+                        let mut path = if p == "." {
+                            specifier.to_string()
+                        } else {
+                            let mut s = p.clone();
+                            s.push('/');
+                            s.push_str(specifier);
+                            s
+                        };
+                        compiler_options.paths_base().normalize_with(path)
+                    })
+                    .chain(base_url_iter)
+                    .collect();
+            } || {
                 let mut longest_prefix_length = 0;
                 let mut longest_suffix_length = 0;
                 let mut best_key: Option<&String> = None;
 
                 for key in paths_map.keys() {
                     if let Some((prefix, suffix)) = key.split_once('*') {
-
                         //–– Special handling for a dot (“.”) alias to support bare imports like "index"
                         if paths_map.contains_key(".") {
-                        let dot_paths = &paths_map["."];
-                        let mut resolved: Vec<_> = dot_paths
-                        .iter()
-                        .map(|p| {
-                        // if mapping is exactly ".", substitute specifier itself
-                        if p == "." {
-                        specifier.to_string()
-                        } else {
-                        // otherwise append specifier under that path
-                        let mut s = p.clone();
-                        s.push('/');
-                        s.push_str(specifier);
-                        s
-                        }
-                        })
-                        .map(|path_str| compiler_options.paths_base().normalize_with(path_str))
-                        .collect();
-                        // fall back to baseUrl after dot alias resolutions
-                        resolved.extend(base_url_iter.clone());
-                        return resolved;
+                            let dot_paths = &paths_map["."];
+                            let mut resolved: Vec<_> = dot_paths
+                                .iter()
+                                .map(|p| {
+                                    // if mapping is exactly ".", substitute specifier itself
+                                    if p == "." {
+                                        specifier.to_string()
+                                    } else {
+                                        // otherwise append specifier under that path
+                                        let mut s = p.clone();
+                                        s.push('/');
+                                        s.push_str(specifier);
+                                        s
+                                    }
+                                })
+                                .map(|path_str| {
+                                    compiler_options.paths_base().normalize_with(path_str)
+                                })
+                                .collect();
+                            // fall back to baseUrl after dot alias resolutions
+                            resolved.extend(base_url_iter.clone());
+                            return resolved;
                         }
 
                         if (best_key.is_none() || prefix.len() > longest_prefix_length)
