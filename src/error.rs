@@ -41,7 +41,7 @@ pub enum ResolveError {
     #[error("{0}")]
     IOError(IOError),
 
-    /// For example, Windows UNC path with Volume GUID is not supported.
+    /// For example, DOS device path with Volume GUID (`\\?\Volume{...}`) is not supported.
     #[error("Path {0:?} contains unsupported construct.")]
     PathNotSupported(PathBuf),
 
