@@ -561,6 +561,24 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
                 return Ok(Some(path));
             }
         }
+
+        // Fallback for multi‑dot extensions: if we requested foo.ts but foo.ts doesn't exist,
+        // try foo.d.ts (or any extension ending with ".ts") in order.
+        if let Some(req_ext) = cached_path.path().extension().and_then(|s| s.to_str()) {
+            for ext in &self.options.extensions {
+                // Only consider extensions longer than the requested one and ending with ".{req_ext}"
+                if ext.len() > req_ext.len() + 1 && ext.ends_with(&format!(".{}", req_ext)) {
+                    let trimmed = ext.trim_start_matches('.');
+                    let candidate = cached_path.path().with_extension(trimmed);
+                    let candidate_cp = self.cache.value(&candidate);
+                    if self.cache.is_file(&candidate_cp, ctx) {
+                        ctx.file_dependencies.insert(candidate.clone());
+                        return Ok(Some(candidate_cp));
+                    }
+                }
+            }
+        }
+
         // 2. If X.js is a file, load X.js as JavaScript text. STOP
         // 3. If X.json is a file, parse X.json to a JavaScript Object. STOP
         // 4. If X.node is a file, load X.node as binary addon. STOP
