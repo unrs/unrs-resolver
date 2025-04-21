@@ -95,6 +95,7 @@ fn multi_dot_extension() {
     #[rustfmt::skip]
     let pass = [
         ("should resolve according to order of provided extensions", "./foo", "foo.ts"),
+        ("should resolve .d.ts for .ts", "./bar.ts", "bar.d.ts"),
         ("should resolve file with extension", "./app.module", "app.module.js")
     ];
 
