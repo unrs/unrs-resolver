@@ -93,6 +93,23 @@ pub type FsResolution = Resolution<FsCache<FileSystemOs>>;
 
 pub use crate::{
     builtins::NODEJS_BUILTINS,
+
+    // Fallback for multi‑dot extensions: if we requested foo.ts but foo.ts doesn't exist,
+    // try foo.d.ts (or any extension ending with ".ts") in order.
+    if let Some(req_ext) = base.extension().and_then(|s| s.to_str()) {
+        for ext in &self.options.extensions {
+            // Only consider extensions longer than the requested one and ending with ".{req_ext}"
+            if ext.len() > req_ext.len() + 1 && ext.ends_with(&format!(".{}", req_ext)) {
+                let trimmed = ext.trim_start_matches('.');
+                let candidate = base.with_extension(trimmed);
+                if self.fs_cache.is_file(&candidate)? {
+                    context.file_dependencies.insert(candidate.clone());
+                    return Ok(Resolution { full_path: candidate });
+                }
+            }
+        }
+    }
+
     cache::{Cache, CachedPath},
     error::{JSONError, ResolveError, SpecifierError},
     options::{
