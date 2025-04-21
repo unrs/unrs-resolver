@@ -874,6 +874,17 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
                         |last| last.1.strip_suffix("/").unwrap_or(last.1),
                     );
 
+                    // Handle nested package.json for subpaths (e.g., @scope/pkg/subpath)
+                    if !subpath.is_empty() {
+                        // Remove leading slash and normalize to a cached path
+                        let sub = subpath.trim_start_matches('/');
+                        let nested_cached = cached_path.normalize_with(sub, self.cache.as_ref());
+                        // If this directory has its own package.json and a main/module entry, attempt to load it
+                        if let Some(dir_res) = self.load_as_directory(&nested_cached, ctx)? {
+                            return Ok(Some(dir_res));
+                        }
+                    }
+
                     let inner_request = if pkg_name.is_empty() {
                         subpath.map_or_else(
                             || ".".to_string(),
