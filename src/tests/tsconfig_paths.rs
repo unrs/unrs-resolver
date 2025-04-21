@@ -298,13 +298,14 @@ fn test_paths_nested_base() {
 }
 
 #[test]
-fn test_paths_dot_alias() {
+fn test_parent_base_url() {
     let f = super::fixture_root().join("tsconfig");
-    let f2 = f.join("cases").join("dot-alias");
+    let f2 = f.join("cases").join("parent-base-url");
 
     #[rustfmt::skip]
     let pass = [
-        (f2.join("test"), "tsconfig.json", "index", f2.join("src/index.ts")),
+        (f2.join("test"), "tsconfig.json", ".", Err(ResolveError::NotFound(".".into()))),
+        (f2.join("test"), "tsconfig.json", "index", Ok(f2.join("src/index.ts"))),
     ];
 
     for (dir, tsconfig, request, expected) in pass {
@@ -316,7 +317,7 @@ fn test_paths_dot_alias() {
             ..ResolveOptions::default().with_extension(String::from(".ts"))
         });
         let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
-        assert_eq!(resolved_path, Ok(expected), "{request} {tsconfig} {dir:?}");
+        assert_eq!(resolved_path, expected, "{request} {tsconfig} {dir:?}");
     }
 }
 
