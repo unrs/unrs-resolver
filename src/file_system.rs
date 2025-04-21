@@ -187,7 +187,7 @@ impl FileSystemOs {
     /// See [std::fs::read_link]
     #[inline]
     pub fn read_link(path: &Path) -> io::Result<PathBuf> {
-        let path = fs::read_link(path)?;
+        let target = fs::read_link(path)?;
         cfg_if! {
             if #[cfg(target_os = "windows")] {
                 match crate::windows::try_strip_windows_prefix(path) {
@@ -196,7 +196,7 @@ impl FileSystemOs {
                     _ => unreachable!(),
                 }
             } else {
-                Ok(path)
+                Ok(target.to_path_buf())
             }
         }
     }
@@ -336,4 +336,38 @@ fn metadata() {
         "FileMetadata { is_file: true, is_dir: true, is_symlink: true }"
     );
     let _ = meta;
+}
+
+#[test]
+fn test_strip_windows_prefix() {
+    assert_eq!(
+        FileSystemOs::try_strip_windows_prefix(PathBuf::from(
+            r"\\?\C:\Users\user\Documents\file.txt"
+        )),
+        Some(PathBuf::from(r"C:\Users\user\Documents\file.txt"))
+    );
+
+    assert_eq!(
+        FileSystemOs::try_strip_windows_prefix(PathBuf::from(
+            r"\\.\C:\Users\user\Documents\file.txt"
+        )),
+        Some(PathBuf::from(r"C:\Users\user\Documents\file.txt"))
+    );
+
+    assert_eq!(
+        FileSystemOs::try_strip_windows_prefix(PathBuf::from(r"\\?\UNC\server\share\file.txt")),
+        Some(PathBuf::from(r"\\server\share\file.txt"))
+    );
+
+    assert_eq!(
+        FileSystemOs::try_strip_windows_prefix(PathBuf::from(
+            r"\\?\Volume{c8ec34d8-3ba6-45c3-9b9d-3e4148e12d00}\file.txt"
+        )),
+        None
+    );
+
+    assert_eq!(
+        FileSystemOs::try_strip_windows_prefix(PathBuf::from(r"\\?\BootPartition\file.txt")),
+        None
+    );
 }
