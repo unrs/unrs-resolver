@@ -58,8 +58,8 @@ pub trait FileSystem: Send + Sync {
     /// # Errors
     /// * Returns an error of [`ResolveError::IOError`] kind if there is an IO error invoking [`std::fs::read_link`].
     /// * Returns an error of [`ResolveError::PathNotSupported`] kind if the symlink target cannot be represented
-    /// as a path that can be consumed by the `import`/`require` syntax of Node.js.
-    /// Caller should not try to follow the symlink in this case.
+    ///   as a path that can be consumed by the `import`/`require` syntax of Node.js.
+    ///   Caller should not try to follow the symlink in this case.
     ///
     /// See [std::fs::read_link]
     fn read_link(&self, path: &Path) -> Result<PathBuf, ResolveError>;
