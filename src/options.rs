@@ -165,7 +165,7 @@ pub struct ResolveOptions {
     ///    * `\\.\Volume{b75e2c83-0000-0000-0000-602f00000000}\folder\` (Volume GUID)
     ///    * `\\.\BootPartition\folder\file.ts` (Drive name)
     ///
-    ///    DOS device path either pointing to a drive with driver letter, or a UNC path, will be simplified and followed, such as
+    ///    DOS device path either pointing to a drive with drive letter, or a UNC path, will be simplified and followed, such as
     ///    * `\\.\D:\path\to\file`: reduced to `D:\path\to\file`;
     ///    * `\\.\UNC\server\share\path\to\file`: reduced to `\\server\share\path\to\file`.
     ///
