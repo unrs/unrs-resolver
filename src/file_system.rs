@@ -193,12 +193,12 @@ impl FileSystemOs {
     /// See [std::fs::read_link]
     #[inline]
     pub fn read_link(path: &Path) -> Result<PathBuf, ResolveError> {
-        let target = fs::read_link(path)?;
+        let path = fs::read_link(path)?;
         cfg_if! {
             if #[cfg(target_os = "windows")] {
-                crate::windows::strip_windows_prefix(target)
+                crate::windows::strip_windows_prefix(path)
             } else {
-                Ok(target.to_path_buf())
+                Ok(path)
             }
         }
     }
