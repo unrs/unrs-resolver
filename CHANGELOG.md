@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### <!-- 1 -->Bug Fixes
 
 - rework on handling DOS device paths on Windows ([#84](https://github.com/unrs/unrs-resolver/pull/84))
+- handle package.json and tsconfig.json with BOM ([#463](https://github.com/oxc-project/oxc-resolver/pull/463))
+
+### <!-- 2 -->Performance
+
+- avoid double call to `parse_package_specifier` ([#465](https://github.com/oxc-project/oxc-resolver/pull/465))
 
 ### <!-- 3 -->Documentation
 
