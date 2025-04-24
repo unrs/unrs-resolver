@@ -1,4 +1,4 @@
-use crate::ResolveError;
+#[cfg(target_family = "windows")]
 use crate::tests::windows::get_dos_device_path;
 #[cfg(target_family = "windows")]
 use normalize_path::NormalizePath;
@@ -161,6 +161,8 @@ fn test() {
 #[cfg(target_family = "windows")]
 #[test]
 fn test_unsupported_targets() {
+    use crate::ResolveError;
+
     let Some(SymlinkFixturePaths { root: _, temp_path }) = prepare_symlinks().unwrap() else {
         return;
     };
