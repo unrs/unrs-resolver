@@ -9,6 +9,9 @@ on:
       - main
     paths:
       - npm/package.json # Please only commit this file, so we don't need to wait for test CI to pass.
+  pull_request:
+    branches:
+      - main
 
 env:
   DEBUG: napi:*
@@ -88,12 +91,7 @@ jobs:
               pnpm build
           - os: ubuntu-latest
             target: riscv64gc-unknown-linux-musl
-            build: |-
-              sudo apt-get update &&
-              sudo apt-get install gcc-riscv64-linux-musl g++-riscv64-linux-musl -y &&
-              export CC=riscv64-linux-musl-gcc &&
-              export CXX=riscv64-linux-musl-g++ &&
-              pnpm build
+            build: pnpm build -x
           - os: ubuntu-latest
             target: s390x-unknown-linux-gnu
             build: export CFLAGS="-fuse-ld=lld" && pnpm build --use-napi-cross
