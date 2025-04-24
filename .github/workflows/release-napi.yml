@@ -34,7 +34,7 @@ jobs:
         id: version
         with:
           static-checking: localIsNew
-          file-url: https://cdn.jsdelivr.net/npm/unrs-resolver@latest/package.json
+          file-url: https://unpkg.com/unrs-resolver@latest/package.json
           file-name: npm/package.json
 
       - name: Set version name
