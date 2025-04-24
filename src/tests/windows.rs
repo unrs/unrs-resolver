@@ -11,7 +11,7 @@ use windows_sys::Win32::{
 };
 
 /// Converts a Win32 drive letter or mounted folder into DOS device path, e.g.:
-/// \\?\Volume{GUID}\
+/// `\\?\Volume{GUID}\`
 pub fn volume_name_from_mount_point<S: AsRef<OsStr>>(
     mount_point: S,
 ) -> Result<OsString, Win32Error> {
@@ -51,7 +51,7 @@ pub fn get_dos_device_path<P: AsRef<Path>>(path: P) -> Result<PathBuf, Win32Erro
         volume_name_from_mount_point(root)?.encode_wide().collect();
     if volume_name_root.starts_with(&[92, 92, 63, 92] /* \\?\ */) {
         // Replace \\?\ with \\.\
-        // While both is a valid DOS device path, "\\?\" won't be accepted when creating symlinks.
+        // While both is a valid DOS device path, "\\?\" won't be accepted by most of the IO operations.
         volume_name_root[2] = b'.' as u16;
     }
 

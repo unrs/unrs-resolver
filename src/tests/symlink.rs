@@ -67,12 +67,12 @@ fn create_symlinks(dirname: &Path, temp_path: &Path) -> io::Result<()> {
         // which potentially can resolve the Volume GUID into driver letter whenever possible.
         let dos_device_temp_path = get_dos_device_path(temp_path).unwrap();
         symlink(
-            dos_device_temp_path.join(r"..\lib"),
+            dos_device_temp_path.join(r"..\..\lib"),
             temp_path.join("device_path_lib"),
             FileType::Dir,
         )?;
         symlink(
-            dos_device_temp_path.join(r"..\lib\index.js"),
+            dos_device_temp_path.join(r"..\..\lib\index.js"),
             temp_path.join("device_path_index.js"),
             FileType::File,
         )?;
