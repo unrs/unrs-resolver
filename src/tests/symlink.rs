@@ -63,7 +63,8 @@ fn create_symlinks(dirname: &Path, temp_path: &Path) -> io::Result<()> {
     #[cfg(target_family = "windows")]
     {
         // Ideally we should point to a Volume that does not have a drive letter.
-        // However, we can just pick up any Volume here as resolver itself is not calling `fs::canonicalize`,
+        // However, it's not trivial to create a Volume in CI environment.
+        // Here we are just picking up any Volume, as resolver itself is not calling `fs::canonicalize`,
         // which potentially can resolve the Volume GUID into driver letter whenever possible.
         let dos_device_temp_path = get_dos_device_path(temp_path).unwrap();
         symlink(
