@@ -2,7 +2,6 @@
 use crate::tests::windows::get_dos_device_path;
 #[cfg(target_family = "windows")]
 use normalize_path::NormalizePath;
-use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::{fs, io, path::Path};
 
@@ -93,24 +92,16 @@ struct SymlinkFixturePaths {
 }
 
 /// Prepares symlinks for the test.
-/// Specify a different `temp_path_suffix` for each test to avoid conflicts when tests are executed concurrently.
+/// Specify a different `temp_path_segment` for each test to avoid conflicts when tests are executed concurrently.
 /// Returns `Ok(None)` if the symlink fixtures cannot be created at all (usually due to a lack of permission).
 /// Returns `Ok(Some(_))` if the symlink fixtures are created successfully, or already exist.
 /// Returns `Err(_)` if there is error creating the symlinks.
-fn prepare_symlinks<S: AsRef<OsStr>>(
-    temp_path_suffix: S,
+fn prepare_symlinks<P: AsRef<Path>>(
+    temp_path_segment: P,
 ) -> io::Result<Option<SymlinkFixturePaths>> {
-    let root = {
-        let temp_path_suffix = temp_path_suffix.as_ref();
-        let mut root = super::fixture_root();
-        // We have ignored /fixtures/enhanced_resolve/test/temp.* in .gitignore
-        let mut subpath = OsString::from("temp.");
-        subpath.push(temp_path_suffix);
-        root.push(subpath);
-        root
-    };
+    let root = super::fixture_root().join("enhanced_resolve");
     let dirname = root.join("test");
-    let temp_path = dirname.join("temp");
+    let temp_path = dirname.join(temp_path_segment.as_ref());
     if !temp_path.exists() {
         if let Err(err) = init(&dirname, &temp_path) {
             println!(
@@ -129,7 +120,7 @@ fn prepare_symlinks<S: AsRef<OsStr>>(
 
 #[test]
 fn test() {
-    let Some(SymlinkFixturePaths { root, temp_path }) = prepare_symlinks("test").unwrap() else {
+    let Some(SymlinkFixturePaths { root, temp_path }) = prepare_symlinks("temp").unwrap() else {
         return;
     };
     let resolver_without_symlinks =
@@ -179,7 +170,7 @@ fn test_unsupported_targets() {
     use crate::ResolveError;
 
     let Some(SymlinkFixturePaths { root: _, temp_path }) =
-        prepare_symlinks("test_unsupported_targets").unwrap()
+        prepare_symlinks("temp.test_unsupported_targets").unwrap()
     else {
         return;
     };
