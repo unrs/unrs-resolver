@@ -2,6 +2,7 @@
 use crate::tests::windows::get_dos_device_path;
 #[cfg(target_family = "windows")]
 use normalize_path::NormalizePath;
+use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::{fs, io, path::Path};
 
@@ -91,11 +92,23 @@ struct SymlinkFixturePaths {
     temp_path: PathBuf,
 }
 
+/// Prepares symlinks for the test.
+/// Specify a different `temp_path_suffix` for each test to avoid conflicts when tests are executed concurrently.
 /// Returns `Ok(None)` if the symlink fixtures cannot be created at all (usually due to a lack of permission).
 /// Returns `Ok(Some(_))` if the symlink fixtures are created successfully, or already exist.
 /// Returns `Err(_)` if there is error creating the symlinks.
-fn prepare_symlinks() -> io::Result<Option<SymlinkFixturePaths>> {
-    let root = super::fixture_root().join("enhanced_resolve");
+fn prepare_symlinks<S: AsRef<OsStr>>(
+    temp_path_suffix: S,
+) -> io::Result<Option<SymlinkFixturePaths>> {
+    let root = {
+        let temp_path_suffix = temp_path_suffix.as_ref();
+        let mut root = super::fixture_root();
+        // We have ignored /fixtures/enhanced_resolve/test/temp.* in .gitignore
+        let mut subpath = OsString::from("temp.");
+        subpath.push(temp_path_suffix);
+        root.push(subpath);
+        root
+    };
     let dirname = root.join("test");
     let temp_path = dirname.join("temp");
     if !temp_path.exists() {
@@ -116,7 +129,9 @@ fn prepare_symlinks() -> io::Result<Option<SymlinkFixturePaths>> {
 
 #[test]
 fn test() {
-    let Some(SymlinkFixturePaths { root, temp_path }) = prepare_symlinks().unwrap() else { return };
+    let Some(SymlinkFixturePaths { root, temp_path }) = prepare_symlinks("test").unwrap() else {
+        return;
+    };
     let resolver_without_symlinks =
         Resolver::new(ResolveOptions { symlinks: false, ..ResolveOptions::default() });
     let resolver_with_symlinks = Resolver::default();
@@ -163,7 +178,9 @@ fn test() {
 fn test_unsupported_targets() {
     use crate::ResolveError;
 
-    let Some(SymlinkFixturePaths { root: _, temp_path }) = prepare_symlinks().unwrap() else {
+    let Some(SymlinkFixturePaths { root: _, temp_path }) =
+        prepare_symlinks("test_unsupported_targets").unwrap()
+    else {
         return;
     };
     let resolver_with_symlinks = Resolver::default();
