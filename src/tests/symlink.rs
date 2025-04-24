@@ -110,15 +110,13 @@ fn prepare_symlinks() -> io::Result<Option<SymlinkFixturePaths>> {
             return Err(err);
         }
     }
-    return Ok(Some(SymlinkFixturePaths { root, temp_path }));
+
+    Ok(Some(SymlinkFixturePaths { root, temp_path }))
 }
 
 #[test]
 fn test() {
-    let SymlinkFixturePaths { root, temp_path } = match prepare_symlinks().unwrap() {
-        Some(paths) => paths,
-        None => return,
-    };
+    let Some(SymlinkFixturePaths { root, temp_path }) = prepare_symlinks().unwrap() else { return };
     let resolver_without_symlinks =
         Resolver::new(ResolveOptions { symlinks: false, ..ResolveOptions::default() });
     let resolver_with_symlinks = Resolver::default();
@@ -163,9 +161,8 @@ fn test() {
 #[cfg(target_family = "windows")]
 #[test]
 fn test_unsupported_targets() {
-    let SymlinkFixturePaths { root: _, temp_path } = match prepare_symlinks().unwrap() {
-        Some(paths) => paths,
-        None => return,
+    let Some(SymlinkFixturePaths { root: _, temp_path }) = prepare_symlinks().unwrap() else {
+        return;
     };
     let resolver_with_symlinks = Resolver::default();
 
