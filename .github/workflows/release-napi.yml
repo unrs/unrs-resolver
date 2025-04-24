@@ -42,7 +42,7 @@ jobs:
 
   build:
     needs: check
-    if: needs.check.outputs.version_changed == 'true'
+    # if: needs.check.outputs.version_changed == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +85,14 @@ jobs:
               sudo apt-get install gcc-riscv64-linux-gnu g++-riscv64-linux-gnu -y &&
               export CC=riscv64-linux-gnu-gcc &&
               export CXX=riscv64-linux-gnu-g++ &&
+              pnpm build
+          - os: ubuntu-latest
+            target: riscv64gc-unknown-linux-musl
+            build: |-
+              sudo apt-get update &&
+              sudo apt-get install gcc-riscv64-linux-musl g++-riscv64-linux-musl -y &&
+              export CC=riscv64-linux-musl-gcc &&
+              export CXX=riscv64-linux-musl-g++ &&
               pnpm build
           - os: ubuntu-latest
             target: s390x-unknown-linux-gnu
