@@ -1,6 +1,6 @@
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 use crate::tests::windows::get_dos_device_path;
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 use normalize_path::NormalizePath;
 use std::path::PathBuf;
 use std::{fs, io, path::Path};
@@ -24,7 +24,7 @@ fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(
         std::os::unix::fs::symlink(original, link)
     }
 
-    #[cfg(target_family = "windows")]
+    #[cfg(target_os = "windows")]
     match file_type {
         // NOTE: original path should use `\` instead of `/` for relative paths
         //       otherwise the symlink will be broken and the test will fail with InvalidFilename error
@@ -60,7 +60,7 @@ fn create_symlinks(dirname: &Path, temp_path: &Path) -> io::Result<()> {
         FileType::File,
     )?;
 
-    #[cfg(target_family = "windows")]
+    #[cfg(target_os = "windows")]
     {
         // Ideally we should point to a Volume that does not have a drive letter.
         // However, it's not trivial to create a Volume in CI environment.
@@ -164,7 +164,7 @@ fn test() {
     }
 }
 
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 #[test]
 fn test_unsupported_targets() {
     use crate::ResolveError;

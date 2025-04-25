@@ -1,4 +1,4 @@
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 use std::{
     ffi::{OsStr, OsString},
     fs::canonicalize,
@@ -10,7 +10,7 @@ use thiserror::Error;
 
 /// Converts a Win32 drive letter or mounted folder into DOS device path, e.g.:
 /// `\\?\Volume{GUID}\`
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 pub fn volume_name_from_mount_point<S: AsRef<OsStr>>(
     mount_point: S,
 ) -> Result<OsString, Win32Error> {
@@ -36,7 +36,7 @@ pub fn volume_name_from_mount_point<S: AsRef<OsStr>>(
     }
 }
 
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 pub fn get_dos_device_path<P: AsRef<Path>>(path: P) -> Result<PathBuf, Win32Error> {
     let path = path.as_ref();
     assert!(path.has_root(), "Expected a path with a root");
@@ -68,7 +68,7 @@ pub struct Win32Error {
     pub error_code: u32,
 }
 
-#[cfg(target_family = "windows")]
+#[cfg(target_os = "windows")]
 #[test]
 fn test_get_dos_device_path() {
     let root = super::fixture_root();
