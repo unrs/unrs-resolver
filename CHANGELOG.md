@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.7.1](https://github.com/unrs/unrs-resolver/compare/v1.7.0...v1.7.1) - 2025-04-26
 
+### Chore
+
+- bump `napi-postinstall` to support `yarn`/`pnpm` on `webcontainer` ([#103](https://github.com/unrs/unrs-resolver/pull/103))
+
 ### <!-- 6 -->Testing
 
 - add case for #65 ([#100](https://github.com/unrs/unrs-resolver/pull/100))
