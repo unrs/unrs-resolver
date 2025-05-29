@@ -161,9 +161,10 @@ fn symlink_with_nested_node_modules() {
     assert_eq!(resolved_path, Ok(f.join("foo/node_modules/dep/index.js")));
 
     let resolver = Resolver::new(ResolveOptions { symlinks: false, ..ResolveOptions::default() });
-    let resolved_path =
-        resolver.resolve(f.join("bar/node_modules/foo"), "dep").map(|r| r.full_path());
-    assert_eq!(resolved_path, Ok(f.join("bar/node_modules/foo/node_modules/dep/index.js")));
+    assert_eq!(
+        resolver.resolve(f.join("bar/node_modules/foo"), "dep"),
+        Err(ResolveError::NotFound("dep".into()))
+    );
 }
 
 #[cfg(windows)]
