@@ -3,6 +3,8 @@
 //! enhanced_resolve's test <https://github.com/webpack/enhanced-resolve/blob/main/test/pnp.test.js>
 //! cannot be ported over because it uses mocks on `pnpApi` provided by the runtime.
 
+use std::env;
+
 use crate::ResolveError::NotFound;
 use crate::{ResolveOptions, Resolver};
 
@@ -129,5 +131,24 @@ fn resolve_pnp_nested_package_json() {
         Ok(fixture.join(
             ".yarn/cache/@atlaskit-pragmatic-drag-and-drop-npm-1.5.2-3241d4f843-1dace49fa3.zip/node_modules/@atlaskit/pragmatic-drag-and-drop/dist/esm/entry-point/combine.js"
         ))
+    );
+}
+
+#[test]
+fn resolve_global_cache() {
+    let global_cache = env::home_dir().unwrap().join(".yarn/berry/cache");
+
+    let resolver = Resolver::default();
+
+    assert_eq!(
+        resolver
+            .resolve(
+                global_cache.join("source-map-support-npm-0.5.21-09ca99e250-9ee09942f4.zip/node_modules/source-map-support/source-map-support.js"),
+                "source-map"
+            )
+            .map(|r| r.full_path()),
+        Ok(global_cache.join(
+            "source-map-npm-0.6.1-1a3621db16-ab55398007.zip/node_modules/source-map/source-map.js"
+        )),
     );
 }
