@@ -134,7 +134,8 @@ fn resolve_pnp_nested_package_json() {
 
 #[test]
 fn resolve_global_cache() {
-    let global_cache = dirs::home_dir().unwrap().join(".yarn/berry/cache");
+    // can not use `.join(".yarn/berry/cache")` here because it is not a valid path on Windows
+    let global_cache = dirs::home_dir().unwrap().join(".yarn").join("berry").join("cache");
 
     let resolver = Resolver::new(ResolveOptions {
         roots: vec![super::fixture_root().join("global-pnp")],
@@ -144,12 +145,12 @@ fn resolve_global_cache() {
     assert_eq!(
         resolver
             .resolve(
-                global_cache.join("source-map-support-npm-0.5.21-09ca99e250-9ee09942f4.zip/node_modules/source-map-support"),
+                global_cache.join("source-map-support-npm-0.5.21-09ca99e250-10c0.zip/node_modules/source-map-support/"),
                 "source-map"
             )
             .map(|r| r.full_path()),
         Ok(global_cache.join(
-            "source-map-npm-0.6.1-1a3621db16-ab55398007.zip/node_modules/source-map/source-map.js"
+            "source-map-npm-0.6.1-1a3621db16-10c0.zip/node_modules/source-map/source-map.js"
         )),
     );
 }

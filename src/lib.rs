@@ -901,17 +901,8 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
             let mut path = cached_path.to_path_buf();
             path.push("");
 
-            if specifier == "source-map" {
-                println!("pnp path: {:?}", path.clone());
-            }
-
             let resolution =
                 pnp::resolve_to_unqualified_via_manifest(pnp_manifest, specifier, path);
-
-            if specifier == "source-map" {
-                println!("pnp specifier: {specifier:?}");
-                println!("pnp resolution: {resolution:?}");
-            }
 
             match resolution {
                 Ok(pnp::Resolution::Resolved(path, subpath)) => {
