@@ -132,6 +132,9 @@ fn resolve_pnp_nested_package_json() {
     );
 }
 
+// Windows is blocked by upstream
+// see also https://github.com/yarnpkg/pnp-rs/pull/10
+#[cfg(not(windows))]
 #[test]
 fn resolve_global_cache() {
     let home_dir = dirs::home_dir().unwrap();
