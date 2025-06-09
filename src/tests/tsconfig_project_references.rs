@@ -222,3 +222,20 @@ fn self_reference() {
         );
     }
 }
+
+#[test]
+fn references_with_extends() {
+    let f = super::fixture_root().join("tsconfig/cases/project_references/extends");
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigOptions {
+            config_file: f.clone(),
+            references: TsconfigReferences::Auto,
+        }),
+        ..ResolveOptions::default()
+    });
+
+    let resolved_path = resolver.resolve(&f.join("src"), "@/pages").map(|f| f.full_path());
+
+    assert_eq!(resolved_path, Ok(f.join("src/pages/index.tsx")));
+}
