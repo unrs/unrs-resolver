@@ -1328,11 +1328,7 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
         })
     }
 
-    fn extend_tsconfig(
-        &self,
-        directory: &C::Cp,
-        tsconfig: &mut C::Tc
-    ) -> Result<(), ResolveError> {
+    fn extend_tsconfig(&self, directory: &C::Cp, tsconfig: &mut C::Tc) -> Result<(), ResolveError> {
         let extended_tsconfig_paths = tsconfig
             .extends()
             .map(|specifier| self.get_extended_tsconfig_path(&directory, tsconfig, specifier))
@@ -1348,18 +1344,13 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
         Ok(())
     }
 
-    fn load_tsconfig_references(
-        &self,
-        tsconfig: &mut C::Tc
-    ) -> Result<(), ResolveError> {
+    fn load_tsconfig_references(&self, tsconfig: &mut C::Tc) -> Result<(), ResolveError> {
         let path = tsconfig.path().to_path_buf();
         let directory = tsconfig.directory().to_path_buf();
         for reference in tsconfig.references_mut() {
             let reference_tsconfig_path = directory.normalize_with(reference.path());
             if reference_tsconfig_path == path {
-                return Err(ResolveError::TsconfigSelfReference(
-                    reference_tsconfig_path,
-                ));
+                return Err(ResolveError::TsconfigSelfReference(reference_tsconfig_path));
             }
             let referenced_tsconfig = self.load_tsconfig(
                 /* root */ false,
