@@ -1331,7 +1331,7 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
     fn extend_tsconfig(&self, directory: &C::Cp, tsconfig: &mut C::Tc) -> Result<(), ResolveError> {
         let extended_tsconfig_paths = tsconfig
             .extends()
-            .map(|specifier| self.get_extended_tsconfig_path(&directory, tsconfig, specifier))
+            .map(|specifier| self.get_extended_tsconfig_path(directory, tsconfig, specifier))
             .collect::<Result<Vec<_>, _>>()?;
         for extended_tsconfig_path in extended_tsconfig_paths {
             let extended_tsconfig = self.load_tsconfig(
