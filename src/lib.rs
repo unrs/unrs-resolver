@@ -1320,42 +1320,55 @@ impl<C: Cache<Cp = FsCachedPath>> ResolverGeneric<C> {
             let directory = self.cache.value(tsconfig.directory());
             tracing::trace!(tsconfig = ?tsconfig, "load_tsconfig");
 
-            // Extend tsconfig
-            let extended_tsconfig_paths = tsconfig
-                .extends()
-                .map(|specifier| self.get_extended_tsconfig_path(&directory, tsconfig, specifier))
-                .collect::<Result<Vec<_>, _>>()?;
-            for extended_tsconfig_path in extended_tsconfig_paths {
-                let extended_tsconfig = self.load_tsconfig(
-                    /* root */ false,
-                    &extended_tsconfig_path,
-                    &TsconfigReferences::Disabled,
-                )?;
-                tsconfig.extend_tsconfig(&extended_tsconfig);
-            }
-
+            self.extend_tsconfig(&directory, tsconfig)?;
             if tsconfig.load_references(references) {
-                let path = tsconfig.path().to_path_buf();
-                let directory = tsconfig.directory().to_path_buf();
-                for reference in tsconfig.references_mut() {
-                    let reference_tsconfig_path = directory.normalize_with(reference.path());
-                    let tsconfig = self.cache.get_tsconfig(
-                        /* root */ true,
-                        &reference_tsconfig_path,
-                        |reference_tsconfig| {
-                            if reference_tsconfig.path() == path {
-                                return Err(ResolveError::TsconfigSelfReference(
-                                    reference_tsconfig.path().to_path_buf(),
-                                ));
-                            }
-                            Ok(())
-                        },
-                    )?;
-                    reference.set_tsconfig(tsconfig);
-                }
+                self.load_tsconfig_references(tsconfig)?;
             }
             Ok(())
         })
+    }
+
+    fn extend_tsconfig(
+        &self,
+        directory: &C::Cp,
+        tsconfig: &mut C::Tc
+    ) -> Result<(), ResolveError> {
+        let extended_tsconfig_paths = tsconfig
+            .extends()
+            .map(|specifier| self.get_extended_tsconfig_path(&directory, tsconfig, specifier))
+            .collect::<Result<Vec<_>, _>>()?;
+        for extended_tsconfig_path in extended_tsconfig_paths {
+            let extended_tsconfig = self.load_tsconfig(
+                /* root */ false,
+                &extended_tsconfig_path,
+                &TsconfigReferences::Disabled,
+            )?;
+            tsconfig.extend_tsconfig(&extended_tsconfig);
+        }
+        Ok(())
+    }
+
+    fn load_tsconfig_references(
+        &self,
+        tsconfig: &mut C::Tc
+    ) -> Result<(), ResolveError> {
+        let path = tsconfig.path().to_path_buf();
+        let directory = tsconfig.directory().to_path_buf();
+        for reference in tsconfig.references_mut() {
+            let reference_tsconfig_path = directory.normalize_with(reference.path());
+            if reference_tsconfig_path == path {
+                return Err(ResolveError::TsconfigSelfReference(
+                    reference_tsconfig_path,
+                ));
+            }
+            let referenced_tsconfig = self.load_tsconfig(
+                /* root */ false,
+                &reference_tsconfig_path,
+                &TsconfigReferences::Disabled,
+            )?;
+            reference.set_tsconfig(referenced_tsconfig);
+        }
+        Ok(())
     }
 
     fn load_tsconfig_paths(
