@@ -188,6 +188,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"custom-minimist@npm:minimist@^1.2.8":
+  version: 1.2.8
+  resolution: "minimist@npm:1.2.8"
+  checksum: 10c0/19d3fcdca050087b84c2029841a093691a91259a47def2f18222f41e7645a0b7c44ef4b40e88a1e58a40c84d2ef0ee6047c55594d298146d0eb3f6b737c20ce6
+  languageName: node
+  linkType: hard
+
 "dir-glob@npm:^3.0.1":
   version: 3.0.1
   resolution: "dir-glob@npm:3.0.1"
@@ -683,6 +690,7 @@ __metadata:
   dependencies:
     "@atlaskit/pragmatic-drag-and-drop": "npm:^1.5.2"
     beachball: "npm:^2.52.0"
+    custom-minimist: "npm:minimist@^1.2.8"
     is-even: "npm:^1.0.0"
     is-odd: "npm:^3.0.1"
     lib: "link:./shared"
