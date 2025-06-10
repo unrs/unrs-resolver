@@ -228,6 +228,7 @@ fn references_with_extends() {
     let f = super::fixture_root().join("tsconfig/cases/project_references/extends");
 
     let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into(), ".tsx".into()],
         tsconfig: Some(TsconfigOptions {
             config_file: f.clone(),
             references: TsconfigReferences::Auto,
@@ -235,7 +236,7 @@ fn references_with_extends() {
         ..ResolveOptions::default()
     });
 
-    let resolved_path = resolver.resolve(&f.join("src"), "@/pages").map(|f| f.full_path());
+    let resolved_path = resolver.resolve(f.join("src"), "@/pages").map(|f| f.full_path());
 
     assert_eq!(resolved_path, Ok(f.join("src/pages/index.tsx")));
 }
