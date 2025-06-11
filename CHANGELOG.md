@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0](https://github.com/unrs/unrs-resolver/compare/v1.8.1...v1.9.0) - 2025-06-11
+
+### <!-- 0 -->Features
+
+- add `file:` protocol path support ([#151](https://github.com/unrs/unrs-resolver/pull/151)) (by @JounQin) - #151
+
+### Contributors
+
+* @JounQin
+
 ## [1.8.1](https://github.com/unrs/unrs-resolver/compare/v1.8.0...v1.8.1) - 2025-06-11
 
 ### <!-- 1 -->Bug Fixes
