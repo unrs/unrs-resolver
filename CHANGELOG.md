@@ -7,11 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0](https://github.com/unrs/unrs-resolver/compare/v1.7.13...v2.0.0) - 2025-06-11
+## [1.8.0](https://github.com/unrs/unrs-resolver/compare/v1.7.13...v1.8.0) - 2025-06-11
 
 ### <!-- 0 -->Features
 
 - support runtime fallback for webcontainer ([#144](https://github.com/unrs/unrs-resolver/pull/144)) (by @JounQin) - #144
+- merge from upstream `oxc-project/oxc-resolver` - 6th ([#146](https://github.com/unrs/unrs-resolver/pull/146)) (by @JounQin) - #146
 
 ### <!-- 7 -->Chore
 
