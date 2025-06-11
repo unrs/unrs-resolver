@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### <!-- 0 -->Features
 
 - add `file:` protocol path support ([#151](https://github.com/unrs/unrs-resolver/pull/151)) (by @JounQin) - #151
+- add two last android targets ([#154](https://github.com/unrs/unrs-resolver/pull/154)) (by @JounQin) - #154
+
+### <!-- 1 -->Bug Fixes
+
+- try different approach to support web container out of box ([#150](https://github.com/unrs/unrs-resolver/pull/150)) (by @JounQin) - #150
 
 ### Contributors
 
