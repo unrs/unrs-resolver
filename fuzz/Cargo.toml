@@ -20,4 +20,4 @@ bench = false
 
 [dependencies]
 libfuzzer-sys = "0.4.7"
-oxc_resolver = { path = ".." }
+unrs_resolver = { path = ".." }
