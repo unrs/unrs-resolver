@@ -26,7 +26,7 @@
     "test": "vitest run -r ./napi"
   },
   "dependencies": {
-    "napi-postinstall": "^0.2.2"
+    "napi-postinstall": "^0.2.4"
   },
   "devDependencies": {
     "@napi-rs/cli": "3.0.0-alpha.91",
@@ -34,7 +34,7 @@
     "@types/node": "^22.15.32",
     "clean-pkg-json": "^1.3.0",
     "emnapi": "^1.4.3",
-    "prettier": "^3.5.3",
+    "prettier": "^3.6.0",
     "prettier-plugin-pkg": "^0.21.1",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
