@@ -195,17 +195,59 @@ fn symlink_with_nested_node_modules() {
 
 #[test]
 fn abnormal_relative() {
-    let f = super::fixture_root().join("abnormal-relative");
+    let f = super::fixture_root().join("abnormal-relative-with-node_modules");
+
+    let base = f.join("foo/bar/baz");
+
     let resolver = Resolver::default();
 
-    let resolved_path =
-        resolver.resolve(f.join("foo/bar/baz"), "jest-runner-../../../").map(|r| r.full_path());
+    let data = [
+        ("2-level abnormal relative path 1", "jest-runner-../../.."),
+        ("2-level abnormal relative path 2", "jest-runner-../../../"),
+        ("2-level abnormal relative path 3", "jest-runner-/../.."),
+        ("2-level abnormal relative path 4", "jest-runner-/../../"),
+    ];
 
-    assert_eq!(
-        resolved_path,
-        Ok(f.join("runner.js")),
-        "should resolve abnormal relative path correctly"
-    );
+    for (comment, request) in data {
+        let resolved_path = resolver.resolve(&base, request).map(|r| r.full_path()).unwrap();
+        assert_eq!(resolved_path, f.join("runner.js"), "{comment} {}", resolved_path.display());
+    }
+
+    let data = [
+        ("1-level abnormal relative path 1", "jest-runner-../.."),
+        ("1-level abnormal relative path 2", "jest-runner-../../"),
+        ("1-level abnormal relative path 3", "jest-runner-/.."),
+        ("1-level abnormal relative path 4", "jest-runner-/../"),
+    ];
+
+    for (comment, request) in data {
+        let resolved_path = resolver.resolve(&base, request);
+        assert_eq!(
+            resolved_path,
+            Err(ResolveError::NotFound(request.into())),
+            "{comment} {request}"
+        );
+    }
+
+    let f = super::fixture_root().join("abnormal-relative-without-node_modules");
+
+    let base = f.join("foo/bar/baz");
+
+    let data = [
+        ("2-level abnormal relative path 1", "jest-runner-../../.."),
+        ("2-level abnormal relative path 2", "jest-runner-../../../"),
+        ("2-level abnormal relative path 3", "jest-runner-/../.."),
+        ("2-level abnormal relative path 4", "jest-runner-/../../"),
+    ];
+
+    for (comment, request) in data {
+        let resolved_path = resolver.resolve(&base, request);
+        assert_eq!(
+            resolved_path,
+            Err(ResolveError::NotFound(request.into())),
+            "{comment} {request}"
+        );
+    }
 }
 
 #[cfg(windows)]
