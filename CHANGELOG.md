@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.0.0](https://github.com/unrs/unrs-resolver/compare/v1.9.2...v2.0.0) - 2025-07-02
+## [1.10.0](https://github.com/unrs/unrs-resolver/compare/v1.9.2...v1.10.0) - 2025-07-02
 
 ### <!-- 1 -->🐛 Bug Fixes
 
