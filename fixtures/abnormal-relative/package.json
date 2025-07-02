@@ -1,0 +1,6 @@
+{
+  "name": "abnormal-relative",
+  "version": "0.1.0",
+  "main": "runner.js",
+  "packageManager": "yarn@1.22.22"
+}

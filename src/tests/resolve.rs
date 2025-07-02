@@ -193,6 +193,21 @@ fn symlink_with_nested_node_modules() {
     );
 }
 
+#[test]
+fn abnormal_relative() {
+    let f = super::fixture_root().join("abnormal-relative");
+    let resolver = Resolver::default();
+
+    let resolved_path =
+        resolver.resolve(f.join("foo/bar/baz"), "jest-runner-../../../").map(|r| r.full_path());
+
+    assert_eq!(
+        resolved_path,
+        Ok(f.join("runner.js")),
+        "should resolve abnormal relative path correctly"
+    );
+}
+
 #[cfg(windows)]
 #[test]
 fn resolve_normalized_on_windows() {
