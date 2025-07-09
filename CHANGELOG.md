@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1](https://github.com/unrs/unrs-resolver/compare/v1.11.0...v1.11.1) - 2025-07-09
+
+### <!-- 3 -->📚 Documentation
+
+- add missing `descriptionFiles` option introduction (by @JounQin)
+
+### Contributors
+
+* @JounQin
+
 ## [1.11.0](https://github.com/unrs/unrs-resolver/compare/v1.10.1...v1.11.0) - 2025-07-06
 
 ### <!-- 0 -->🚀 Features
