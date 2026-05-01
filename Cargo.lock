@@ -117,12 +117,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clean-path"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa6b4b263a5d737e9bf6b7c09b72c41a5480aec4d7219af827f6564e950b6a5"
-
-[[package]]
 name = "cmake"
 version = "0.1.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -311,9 +305,9 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "endian-type"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c34f04666d835ff5d62e058c3995147c06f42fe86ff053337632bca83e42702d"
+checksum = "869b0adbda23651a9c5c0c3d270aac9fcb52e8622a8f2b17e57802d7791962f2"
 
 [[package]]
 name = "equivalent"
@@ -323,9 +317,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "fancy-regex"
-version = "0.14.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e24cb5a94bcae1e5408b0effca5cd7172ea3c5755049c5f3af4cd283a165298"
+checksum = "72cf461f865c862bb7dc573f643dd6a2b6842f7c30b07882b56bd148cc2761b8"
 dependencies = [
  "bit-set",
  "regex-automata",
@@ -342,6 +336,16 @@ dependencies = [
  "libc",
  "libredox",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "flate2"
+version = "1.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c"
+dependencies = [
+ "miniz_oxide",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -388,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.4"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5971ac85611da7067dbfcabef3c70ebb5606018acd9e2a3903a0da507521e0d5"
+checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
 
 [[package]]
 name = "icu_collections"
@@ -501,13 +505,14 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.10.0"
+version = "2.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
+checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
  "hashbrown",
  "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -528,9 +533,9 @@ dependencies = [
 
 [[package]]
 name = "json-strip-comments"
-version = "1.0.4"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b271732a960335e715b6b2ae66a086f115c74eb97360e996d2bd809bfc063bba"
+checksum = "9301b34ecbe81051a62001a2dfa56d906628efdfbc68153e0a4d5eba58181ece"
 dependencies = [
  "memchr",
 ]
@@ -554,7 +559,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -619,6 +624,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316"
 dependencies = [
  "adler2",
+ "simd-adler32",
 ]
 
 [[package]]
@@ -689,6 +695,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "nodejs-built-in-modules"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5eb86a92577833b75522336f210c49d9ebd7dd55a44d80a92e68c668a75f27c"
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -738,12 +750,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "path-slash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
-
-[[package]]
 name = "pathdiff"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -769,16 +775,16 @@ checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
 name = "pnp"
-version = "0.11.0"
+version = "0.12.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc6da10bf83fe58dfcd4ab14ab45c8d3a375663cfd8f44e924c54379b431dbd3"
+checksum = "5401c5598b8244888870c2f1e84bb7bc1976f01c0043f1a4070a268409276840"
 dependencies = [
  "byteorder",
- "clean-path",
  "concurrent_lru",
  "fancy-regex",
- "miniz_oxide",
- "path-slash",
+ "flate2",
+ "indexmap",
+ "nodejs-built-in-modules",
  "pathdiff",
  "radix_trie",
  "rustc-hash",
@@ -822,9 +828,9 @@ checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 
 [[package]]
 name = "radix_trie"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c069c179fcdc6a2fe24d8d18305cf085fdbd4f922c041943e203685d6a1c58fd"
+checksum = "3b4431027dcd37fc2a73ef740b5f233aa805897935b8bce0195e41bbf9a3289a"
 dependencies = [
  "endian-type",
  "nibble_vec",
@@ -932,18 +938,28 @@ checksum = "56e6fa9c48d24d85fb3de5ad847117517440f6beceb7798af16b4a87d616b8d0"
 
 [[package]]
 name = "serde"
-version = "1.0.219"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
+checksum = "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
+dependencies = [
+ "serde_core",
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_core"
+version = "1.0.228"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.219"
+version = "1.0.228"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
+checksum = "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -977,6 +993,12 @@ name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
+
+[[package]]
+name = "simd-adler32"
+version = "0.3.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214"
 
 [[package]]
 name = "simdutf8"
@@ -1179,9 +1201,9 @@ dependencies = [
 
 [[package]]
 name = "vfs"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ec343ec20aa715908fd028a4b8e7c99a349d13143224222e4d61c316d1e7f0a"
+checksum = "69d33cbe2ac48f2a446f04c33aef4906078ffd224888df5ae60b7ed401ded771"
 dependencies = [
  "filetime",
 ]
@@ -1525,3 +1547,9 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "zlib-rs"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3be3d40e40a133f9c916ee3f9f4fa2d9d63435b5fbe1bfc6d9dae0aa0ada1513"

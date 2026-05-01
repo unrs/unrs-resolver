@@ -27,9 +27,9 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: taiki-e/checkout-action@b13d20b7cda4e2f325ef19895128f7ff735c0b3d # v1.3.1
+      - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: taiki-e/install-action@2383334cf567d78771fc7d89b6b3802ef1412cf6 # v2.56.8
+      - uses: taiki-e/install-action@7769b73c2ec98c38dfcf2e18c83cfd4880c038c1 # v2.75.27
         with:
           tool: zizmor
 
@@ -39,7 +39,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@181d5eefc20863364f96762470ba6f862bdef56b # v3.29.2
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225 # v4.35.2
         with:
           sarif_file: results.sarif
           category: zizmor
