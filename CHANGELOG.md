@@ -7,6 +7,170 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0](https://github.com/unrs/unrs-resolver/compare/v1.11.1...v1.12.0) - 2026-05-18
+
+### <!-- 0 -->🚀 Features
+
+- add `node_path` option to disable `NODE_PATH` env var behavior ([#1031](https://github.com/unrs/unrs-resolver/pull/1031)) (by @Boshen) - #202
+- add DTS resolver matching TypeScript's bundler mode ([#997](https://github.com/unrs/unrs-resolver/pull/997)) (by @Boshen) - #202
+- support NODE_PATH module lookup ([#1020](https://github.com/unrs/unrs-resolver/pull/1020)) (by @Boshen) - #202
+- allow access to inner data in error related types ([#990](https://github.com/unrs/unrs-resolver/pull/990)) (by @sapphi-red) - #202
+- allow subpath imports that start with #/ ([#907](https://github.com/unrs/unrs-resolver/pull/907)) (by @Boshen) - #202
+- [**breaking**] disallow manually passing a list of references to `TsconfigOptions::references` ([#902](https://github.com/unrs/unrs-resolver/pull/902)) (by @Boshen) - #202
+- support tsconfig `rootDirs` ([#885](https://github.com/unrs/unrs-resolver/pull/885)) (by @Boshen) - #202
+- *(napi)* expose resolve_file API as resolveFileSync and resolveFileAsync ([#900](https://github.com/unrs/unrs-resolver/pull/900)) (by @Boshen)
+- add `resolve_file` API for tsconfig auto discovery to work ([#860](https://github.com/unrs/unrs-resolver/pull/860)) (by @Boshen) - #202
+- port tsconfck (find tsconfig files) ([#854](https://github.com/unrs/unrs-resolver/pull/854)) (by @Boshen) - #202
+- add many.rs example for profiling resolver with many packages ([#836](https://github.com/unrs/unrs-resolver/pull/836)) (by @Boshen) - #202
+- improve error message for empty package.json files ([#793](https://github.com/unrs/unrs-resolver/pull/793)) (by @Boshen) - #202
+- improve PackagePathNotExported error message with condition names (by @Boshen) - #202
+- add big-endian support for package.json parsing ([#768](https://github.com/unrs/unrs-resolver/pull/768)) (by @Boshen) - #202
+- add tsconfig discovery ([#758](https://github.com/unrs/unrs-resolver/pull/758)) (by @Boshen) - #202
+- add ESM file:// protocol support with comprehensive tests ([#746](https://github.com/unrs/unrs-resolver/pull/746)) (by @Boshen) - #202
+- only resolve file:// protocol on windows ([#737](https://github.com/unrs/unrs-resolver/pull/737)) (by @Boshen) - #202
+- add benchmark for package.json deserialization ([#698](https://github.com/unrs/unrs-resolver/pull/698)) (by @Boshen) - #202
+- *(tsconfig)* support `files` / `include` / `exclude` ([#659](https://github.com/unrs/unrs-resolver/pull/659)) (by @shulaoda)
+- feat(tsconfig) support `allowJs` in `compilerOptions` ([#658](https://github.com/unrs/unrs-resolver/pull/658)) (by @shulaoda) - #202
+- *(tsconfig)* complete inheritance of `compilerOptions` fields ([#657](https://github.com/unrs/unrs-resolver/pull/657)) (by @shulaoda)
+- support pass closure to restriction ([#604](https://github.com/unrs/unrs-resolver/pull/604)) (by @JounQin) - #202
+
+### <!-- 1 -->🐛 Bug Fixes
+
+- avoid panic in resolve_file for parentless paths ([#1053](https://github.com/unrs/unrs-resolver/pull/1053)) (by @Boshen) - #202
+- *(dts)* strip ./ prefix from package entry when matching typesVersions ([#1051](https://github.com/unrs/unrs-resolver/pull/1051)) (by @Boshen)
+- *(dts)* expand Declaration to TypeScript|Declaration for package entry resolution ([#1050](https://github.com/unrs/unrs-resolver/pull/1050)) (by @Boshen)
+- *(dts)* prefer declaration extensions over JS in exports-resolved paths ([#1047](https://github.com/unrs/unrs-resolver/pull/1047)) (by @Boshen)
+- avoid wasm/wasi dead-code lint in NodePath ([#1043](https://github.com/unrs/unrs-resolver/pull/1043)) (by @Boshen) - #202
+- resolve normalized path on Windows even for `symlinks: false` ([#1036](https://github.com/unrs/unrs-resolver/pull/1036)) (by @sapphi-red) - #202
+- skip unreadable tsconfig files during auto-discovery ([#1033](https://github.com/unrs/unrs-resolver/pull/1033)) (by @longlho) - #202
+- remove invalid debug_assert for symlink + package.json ([#1032](https://github.com/unrs/unrs-resolver/pull/1032)) (by @Boshen) - #202
+- resolve clippy unnecessary_unwrap warning ([#980](https://github.com/unrs/unrs-resolver/pull/980)) (by @Boshen) - #202
+- prevent tsconfig cache pollution with separate raw and built caches ([#970](https://github.com/unrs/unrs-resolver/pull/970)) (by @Boshen) - #202
+- use `/fixtures` path for WASI target (by @Boshen) - #202
+- only recreate the cache when `yarn_pnp` is toggled ([#943](https://github.com/unrs/unrs-resolver/pull/943)) (by @Boshen) - #202
+- resolve absolute path to package with trailing slash ([#942](https://github.com/unrs/unrs-resolver/pull/942)) (by @Boshen) - #202
+- show yarn pnp errors as-is instead of NotFound error ([#939](https://github.com/unrs/unrs-resolver/pull/939)) (by @sapphi-red) - #202
+- resolve solution tsconfig for auto discovered tsconfig ([#927](https://github.com/unrs/unrs-resolver/pull/927)) (by @Boshen) - #202
+- fix `clone_with_options` + `yarn_pnp: true` not working ([#916](https://github.com/unrs/unrs-resolver/pull/916)) (by @sapphi-red) - #202
+- fix resolution when resolving non-relative specifier on tsconfig baseUrl ([#903](https://github.com/unrs/unrs-resolver/pull/903)) (by @Boshen) - #202
+- add fallback for statx NOSYS error on old kernels ([#901](https://github.com/unrs/unrs-resolver/pull/901)) (by @Boshen) - #202
+- correct grammatical errors in documentation and comments ([#897](https://github.com/unrs/unrs-resolver/pull/897)) (by @Boshen) - #202
+- resolve `node_modules/package/dir/foo.js` if `node_modules/package/dir/foo/` exists ([#896](https://github.com/unrs/unrs-resolver/pull/896)) (by @Boshen) - #202
+- incorrect resolution when project reference extends a tsconfig without baseUrl ([#882](https://github.com/unrs/unrs-resolver/pull/882)) (by @Boshen) - #202
+- store PathBuf with weak pointers to handle cache clearing ([#879](https://github.com/unrs/unrs-resolver/pull/879)) (by @Boshen) - #202
+- apply `conditionNames: ['node', 'import']` when resolving tsconfig extends ([#869](https://github.com/unrs/unrs-resolver/pull/869)) (by @Boshen) - #202
+- do not resolve to `node_modules/pacakge/index` ([#849](https://github.com/unrs/unrs-resolver/pull/849)) (by @Boshen) - #202
+- use std::fs::canonicalize as a fallback when canonicalize fails ([#835](https://github.com/unrs/unrs-resolver/pull/835)) (by @Boshen) - #202
+- remove AT_STATX_DONT_SYNC from statx calls ([#828](https://github.com/unrs/unrs-resolver/pull/828)) (by @Boshen) - #202
+- *(package_json)* re-read file for serde_json fallback in simd implementation ([#808](https://github.com/unrs/unrs-resolver/pull/808)) (by @Boshen)
+- revert system file cache optimization on Linux ([#810](https://github.com/unrs/unrs-resolver/pull/810)) (by @Brooooooklyn) - #202
+- skip loading tsconfig.json from virtual module paths ([#809](https://github.com/unrs/unrs-resolver/pull/809)) (by @sapphi-red) - #202
+- don't drop canonicalized path by cache clear ([#791](https://github.com/unrs/unrs-resolver/pull/791)) (by @sapphi-red) - #202
+- derive Error for JSONError ([#779](https://github.com/unrs/unrs-resolver/pull/779)) (by @Boshen) - #202
+- tsconfig paths should not be applied to paths inside node_modules ([#760](https://github.com/unrs/unrs-resolver/pull/760)) (by @Boshen) - #202
+- ensure canonicalized paths remain accessible via strong references ([#733](https://github.com/unrs/unrs-resolver/pull/733)) (by @Boshen) - #202
+- use `Weak` references for `CachedPath` to enable proper drop ([#727](https://github.com/unrs/unrs-resolver/pull/727)) (by @Boshen) - #202
+- *(tsconfig)* respect Yarn PnP when resolving `extends` paths ([#656](https://github.com/unrs/unrs-resolver/pull/656)) (by @shulaoda)
+- allow resolving `package?query#fragment` for packages with exports field ([#655](https://github.com/unrs/unrs-resolver/pull/655)) (by @sapphi-red) - #202
+- support for resolving empty tsconfig file ([#602](https://github.com/unrs/unrs-resolver/pull/602)) (by @JounQin) - #202
+
+### <!-- 2 -->🚜 Refactor
+
+- remove clear_cache test that dynamically creates fixtures (by @Boshen) - #202
+- move resolve and misc fixtures into fixtures/integration (by @Boshen) - #202
+- replace ignored doctest with link to example (by @Boshen) - #202
+- consolidate fixture directories for better test file mapping (by @Boshen) - #202
+- replace `url` crate with `percent-encoding` ([#1065](https://github.com/unrs/unrs-resolver/pull/1065)) (by @Boshen) - #202
+- clean up commented-out code in parse_package_specifier ([#1035](https://github.com/unrs/unrs-resolver/pull/1035)) (by @Boshen) - #202
+- replace builtins.rs with nodejs-built-in-modules crate ([#940](https://github.com/unrs/unrs-resolver/pull/940)) (by @Boshen) - #202
+- s/self.cache.as_ref()/&self.cache ([#910](https://github.com/unrs/unrs-resolver/pull/910)) (by @Boshen) - #202
+- remove redundant PathBuf storage in CachedPath ([#891](https://github.com/unrs/unrs-resolver/pull/891)) (by @Boshen) - #202
+- remove the redundant `inner_resolver` from `load_pnp` ([#862](https://github.com/unrs/unrs-resolver/pull/862)) (by @Boshen) - #202
+- improve `Debug` and `Display` for `CachedPath` ([#861](https://github.com/unrs/unrs-resolver/pull/861)) (by @Boshen) - #202
+- too_many_arguments = "allow" ([#863](https://github.com/unrs/unrs-resolver/pull/863)) (by @Boshen) - #202
+- change Tsconfig::parse to accept owned string; add replace_bom_with_whitespace ([#859](https://github.com/unrs/unrs-resolver/pull/859)) (by @Boshen) - #202
+- remove the useless getters and setters from `CompilerOptions` ([#858](https://github.com/unrs/unrs-resolver/pull/858)) (by @Boshen) - #202
+- add `Tsconfig:references_resolved` ([#856](https://github.com/unrs/unrs-resolver/pull/856)) (by @Boshen) - #202
+- move tsconfig resolution related code to its own file ([#855](https://github.com/unrs/unrs-resolver/pull/855)) (by @Boshen) - #202
+- use RwLock<Vec<Arc<PackageJson>> for package.json storage ([#838](https://github.com/unrs/unrs-resolver/pull/838)) (by @Boshen) - #202
+- do not store is_symlink in CachedPathImpl ([#850](https://github.com/unrs/unrs-resolver/pull/850)) (by @Boshen) - #202
+- remove CachedPathImpl::canonicaling ([#834](https://github.com/unrs/unrs-resolver/pull/834)) (by @Boshen) - #202
+- *(file_system)* deduplicate read methods and use Vec<u8> ([#816](https://github.com/unrs/unrs-resolver/pull/816)) (by @Boshen)
+- use cfg_if and rustix in read_to_string_bypass_system_cache ([#802](https://github.com/unrs/unrs-resolver/pull/802)) (by @Boshen) - #202
+- remove normalize-path dependency, use internal PathUtil ([#742](https://github.com/unrs/unrs-resolver/pull/742)) (by @Boshen) - #202
+- remove a redundant path clone from PackageJson::parse ([#725](https://github.com/unrs/unrs-resolver/pull/725)) (by @Boshen) - #202
+- split src/cache.rs into logical modules ([#714](https://github.com/unrs/unrs-resolver/pull/714)) (by @Boshen) - #202
+
+### <!-- 3 -->📚 Documentation
+
+- map npm package links to npmx.dev ([#1028](https://github.com/unrs/unrs-resolver/pull/1028)) (by @Boshen) - #202
+- *(README.md)* update logo ([#968](https://github.com/unrs/unrs-resolver/pull/968)) (by @sapphi-red)
+
+### <!-- 4 -->⚡ Performance
+
+- remove unnecessary String clone in PnP resolution ([#1039](https://github.com/unrs/unrs-resolver/pull/1039)) (by @Boshen) - #202
+- use byte operations instead of char iteration in specifier parser ([#1038](https://github.com/unrs/unrs-resolver/pull/1038)) (by @Boshen) - #202
+- *(resolve)* reuse dot-prefixed subpath in exports/imports ([#1004](https://github.com/unrs/unrs-resolver/pull/1004)) (by @Boshen)
+- *(cache)* remove package.json index arena indirection ([#1003](https://github.com/unrs/unrs-resolver/pull/1003)) (by @Boshen)
+- *(tsconfig)* precompile wildcard path alias matcher ([#1001](https://github.com/unrs/unrs-resolver/pull/1001)) (by @Boshen)
+- precompile alias match metadata in resolver hot path ([#999](https://github.com/unrs/unrs-resolver/pull/999)) (by @Boshen) - #202
+- remove an allocation from `CachedPath::module_directory` ([#880](https://github.com/unrs/unrs-resolver/pull/880)) (by @Boshen) - #202
+- skip searching for node_modules/@scope/package.json ([#876](https://github.com/unrs/unrs-resolver/pull/876)) (by @Boshen) - #202
+- remove the redundant `node_modules/package/index` cache value ([#875](https://github.com/unrs/unrs-resolver/pull/875)) (by @Boshen) - #202
+- cache all package.json resolutions for faster package.json lookup ([#853](https://github.com/unrs/unrs-resolver/pull/853)) (by @Boshen) - #202
+- do not canonicalize the entry path ([#848](https://github.com/unrs/unrs-resolver/pull/848)) (by @Boshen) - #202
+- remove Result from `CachedPathImpl::canonicalized` ([#847](https://github.com/unrs/unrs-resolver/pull/847)) (by @Boshen) - #202
+- fast path for node_modules/package ([#839](https://github.com/unrs/unrs-resolver/pull/839)) (by @Boshen) - #202
+- cache canonicalization results at every recursion level ([#843](https://github.com/unrs/unrs-resolver/pull/843)) (by @Boshen) - #202
+- use IdentityHasher for visited set to avoid double hashing ([#837](https://github.com/unrs/unrs-resolver/pull/837)) (by @Boshen) - #202
+- optimize FileSystem metadata operations with rustix ([#800](https://github.com/unrs/unrs-resolver/pull/800)) (by @Boshen) - #202
+- use simd-json for package.json parsing ([#761](https://github.com/unrs/unrs-resolver/pull/761)) (by @Boshen) - #202
+- make url crate optional for wasm32 targets (by @Boshen) - #202
+- mark error path functions as #[cold] for better optimization ([#729](https://github.com/unrs/unrs-resolver/pull/729)) (by @Boshen) - #202
+- bypass file system read cache if memory cache is available ([#707](https://github.com/unrs/unrs-resolver/pull/707)) (by @Brooooooklyn) - #202
+- use `memmap` to speed up file reading ([#696](https://github.com/unrs/unrs-resolver/pull/696)) (by @Boshen) - #202
+- use `GetFileAttributesExW` for symlink metadata lookup on Windows ([#691](https://github.com/unrs/unrs-resolver/pull/691)) (by @sapphi-red) - #202
+- improve `pattern_key_compare` ([#639](https://github.com/unrs/unrs-resolver/pull/639)) (by @Boshen) - #202
+- most specifiers don't have escaped characters ([#636](https://github.com/unrs/unrs-resolver/pull/636)) (by @Boshen) - #202
+
+### <!-- 6 -->🧪 Testing
+
+- add 28 tests to improve coverage (92% → 93%) ([#1082](https://github.com/unrs/unrs-resolver/pull/1082)) (by @Boshen) - #202
+- use CARGO_MANIFEST_DIR instead `env::current_dir` (by @Boshen) - #202
+- Add a test to ensure NODEJS_BUILTINS is alphabetized. ([#926](https://github.com/unrs/unrs-resolver/pull/926)) (by @connorshea) - #202
+- add test cases for package imports starting with `#` or `#/` ([#905](https://github.com/unrs/unrs-resolver/pull/905)) (by @Boshen) - #202
+- change all fixture directory names to dashed case ([#884](https://github.com/unrs/unrs-resolver/pull/884)) (by @Boshen) - #202
+- add a tsconfig extend not found case ([#763](https://github.com/unrs/unrs-resolver/pull/763)) (by @Boshen) - #202
+- improve test coverage for edge cases ([#740](https://github.com/unrs/unrs-resolver/pull/740)) (by @Boshen) - #202
+- improve coverage for check_restrictions ([#739](https://github.com/unrs/unrs-resolver/pull/739)) (by @Boshen) - #202
+- add memory leak test ([#726](https://github.com/unrs/unrs-resolver/pull/726)) (by @Boshen) - #202
+- enable Windows global pnp case ([#703](https://github.com/unrs/unrs-resolver/pull/703)) (by @JounQin) - #202
+- *(tsconfig)* tweak jsx `extends` tests ([#666](https://github.com/unrs/unrs-resolver/pull/666)) (by @shulaoda)
+- make tests pass on Windows ([#654](https://github.com/unrs/unrs-resolver/pull/654)) (by @sapphi-red) - #202
+
+### <!-- 9 -->💼 Other
+
+- Merge remote-tracking branch 'upstream/main' into chore/merge_upstream (by @JounQin) - #202
+- add tsconfig paths alias scalability benchmark ([#1002](https://github.com/unrs/unrs-resolver/pull/1002)) (by @Boshen) - #202
+- Revert "perf: use `memmap` to speed up file reading" ([#701](https://github.com/unrs/unrs-resolver/pull/701)) (by @Boshen) - #202
+- Add comprehensive tests for tsconfig extends functionality ([#660](https://github.com/unrs/unrs-resolver/pull/660)) (by @Copilot) - #202
+- Expose the `ExtendsField` enum of TsConfig ([#607](https://github.com/unrs/unrs-resolver/pull/607)) (by @ostenbom) - #202
+
+### Contributors
+
+* @JounQin
+* @renovate[bot]
+* @Boshen
+* @sapphi-red
+* @longlho
+* @leegeunhyeok
+* @connorshea
+* @Brooooooklyn
+* @oxc-bot
+* @shulaoda
+* @Copilot
+* @ostenbom
+
 ## [1.11.1](https://github.com/unrs/unrs-resolver/compare/v1.11.0...v1.11.1) - 2025-07-09
 
 ### <!-- 3 -->📚 Documentation
