@@ -1,6 +1,6 @@
 {
   "name": "unrs-resolver",
-  "version": "2.0.0",
+  "version": "1.12.0",
   "description": "UnRS Resolver Node API",
   "homepage": "https://github.com/unrs/unrs-resolver",
   "license": "MIT",
