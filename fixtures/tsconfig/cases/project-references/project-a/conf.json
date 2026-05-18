@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "paths": {
+      "@/*": ["./aliased/*"]
+    }
+  },
+  "files": ["./index.ts", "./aliased/index.ts"]
+}

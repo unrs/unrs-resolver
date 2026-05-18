@@ -2,12 +2,29 @@ packages:
   - npm
   - napi
   - fixtures/pnpm
-  - fixtures/pnpm-workspace/**
+  - fixtures/tsconfck
+  - fixtures/pnpm/pnpm-workspace/**
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@latest
+  vite-plus: ^0.1.11
+  vitest: npm:@voidzero-dev/vite-plus-test@latest
+
+ignoreScripts: true
 
 ignoredBuiltDependencies:
   - esbuild
 
-ignoreScripts: true
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
 
-# For `windows_symlinked_longfilename` in tests/resolve_test.rs
+peerDependencyRules:
+  allowAny:
+    - vite
+    - vitest
+  allowedVersions:
+    vite: "*"
+    vitest: "*"
+
 virtualStoreDirMaxLength: 1024

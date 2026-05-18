@@ -51,7 +51,7 @@ fn default_enforce_extension() {
         extensions: vec![".ts".into(), String::new(), ".js".into()],
         ..ResolveOptions::default()
     })
-    .resolve_with_context(&f, "./foo", &mut ctx);
+    .resolve_with_context(&f, "./foo", None, &mut ctx);
 
     assert_eq!(resolved.map(Resolution::into_path_buf), Ok(f.join("foo.ts")));
     assert_eq!(
@@ -72,7 +72,7 @@ fn respect_enforce_extension() {
         extensions: vec![".ts".into(), String::new(), ".js".into()],
         ..ResolveOptions::default()
     })
-    .resolve_with_context(&f, "./foo", &mut ctx);
+    .resolve_with_context(&f, "./foo", None, &mut ctx);
 
     assert_eq!(resolved.map(Resolution::into_path_buf), Ok(f.join("foo.ts")));
     assert_eq!(
@@ -125,4 +125,25 @@ fn without_leading_dot() {
         extensions: vec!["ts".into(), "js".into()],
         ..ResolveOptions::default()
     });
+}
+
+#[test]
+fn extension_combinations() {
+    let f = super::fixture().join("extensions");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".jsx".into(), ".tsx".into(), ".js".into(), ".ts".into()],
+        ..ResolveOptions::default()
+    });
+
+    let pass = [
+        ("should resolve file with explicit extension", "./foo.ts", "foo.ts"),
+        ("should resolve directory index", "./dir/index.ts", "dir/index.ts"),
+    ];
+
+    for (comment, request, expected_path) in pass {
+        let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());
+        let expected = f.join(expected_path);
+        assert_eq!(resolved_path, Ok(expected), "{comment} {request} {expected_path}");
+    }
 }

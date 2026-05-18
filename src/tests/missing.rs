@@ -1,8 +1,6 @@
 //! https://github.com/webpack/enhanced-resolve/blob/main/test/missing.test.js
 
-use normalize_path::NormalizePath;
-
-use crate::{AliasValue, ResolveContext, ResolveOptions, Resolver};
+use crate::{AliasValue, PathUtil, ResolveContext, ResolveOptions, Resolver};
 
 #[test]
 fn test() {
@@ -39,7 +37,6 @@ fn test() {
         (
             "m1/",
             vec![
-                f.join("node_modules/m1/index"),
                 f.join("node_modules/m1/index.js"),
                 f.join("node_modules/m1/index.json"),
                 f.join("node_modules/m1/index.node"),
@@ -52,7 +49,7 @@ fn test() {
 
     for (specifier, missing_dependencies) in data {
         let mut ctx = ResolveContext::default();
-        let _ = resolver.resolve_with_context(&f, specifier, &mut ctx);
+        let _ = resolver.resolve_with_context(&f, specifier, None, &mut ctx);
 
         for path in ctx.file_dependencies {
             assert_eq!(path, path.normalize(), "{path:?}");
@@ -90,8 +87,8 @@ fn alias_and_extensions() {
     });
 
     let mut ctx = ResolveContext::default();
-    let _ = resolver.resolve_with_context(&f, "@scope-js/package-name/dir/router", &mut ctx);
-    let _ = resolver.resolve_with_context(&f, "react-dom/client", &mut ctx);
+    let _ = resolver.resolve_with_context(&f, "@scope-js/package-name/dir/router", None, &mut ctx);
+    let _ = resolver.resolve_with_context(&f, "react-dom/client", None, &mut ctx);
 
     for path in ctx.file_dependencies {
         assert_eq!(path, path.normalize(), "{path:?}");

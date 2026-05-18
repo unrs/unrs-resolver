@@ -17,16 +17,18 @@ pub trait FileSystem: Send + Sync {
     #[cfg(not(feature = "yarn_pnp"))]
     fn new() -> Self;
 
+    /// See [std::fs::read]
+    ///
+    /// # Errors
+    ///
+    /// * See [std::fs::read]
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
+
     /// See [std::fs::read_to_string]
     ///
     /// # Errors
     ///
     /// * See [std::fs::read_to_string]
-    /// ## Warning
-    /// Use `&Path` instead of a generic `P: AsRef<Path>` here,
-    /// because object safety requirements, it is especially useful, when
-    /// you want to store multiple `dyn FileSystem` in a `Vec` or use a `ResolverGeneric<Fs>` in
-    /// napi env.
     fn read_to_string(&self, path: &Path) -> io::Result<String>;
 
     /// See [std::fs::metadata]
@@ -62,6 +64,13 @@ pub trait FileSystem: Send + Sync {
     ///
     /// See [std::fs::read_link]
     fn read_link(&self, path: &Path) -> Result<PathBuf, ResolveError>;
+
+    /// Returns the canonical, absolute form of a path with all intermediate components normalized.
+    ///
+    /// # Errors
+    ///
+    /// See [std::fs::canonicalize]
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf>;
 }
 
 /// Metadata information about a file
@@ -94,6 +103,13 @@ impl FileMetadata {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl From<crate::windows::SymlinkMetadata> for FileMetadata {
+    fn from(value: crate::windows::SymlinkMetadata) -> Self {
+        Self::new(value.is_file, value.is_dir, value.is_symlink)
+    }
+}
+
 #[cfg(feature = "yarn_pnp")]
 impl From<pnp::fs::FileType> for FileMetadata {
     fn from(value: pnp::fs::FileType) -> Self {
@@ -119,16 +135,17 @@ pub struct FileSystemOs {
 impl FileSystemOs {
     /// # Errors
     ///
-    /// See [std::fs::read_to_string]
-    pub fn read_to_string(path: &Path) -> io::Result<String> {
+    /// See [std::io::ErrorKind::InvalidData]
+    #[inline]
+    pub fn validate_string(bytes: Vec<u8>) -> io::Result<String> {
         // `simdutf8` is faster than `std::str::from_utf8` which `fs::read_to_string` uses internally
-        let bytes = std::fs::read(path)?;
         if simdutf8::basic::from_utf8(&bytes).is_err() {
             // Same error as `fs::read_to_string` produces (`io::Error::INVALID_UTF8`)
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "stream did not contain valid UTF-8",
-            ));
+            #[cold]
+            fn invalid_utf8_error() -> io::Error {
+                io::Error::new(io::ErrorKind::InvalidData, "stream did not contain valid UTF-8")
+            }
+            return Err(invalid_utf8_error());
         }
         // SAFETY: `simdutf8` has ensured it's a valid UTF-8 string
         Ok(unsafe { String::from_utf8_unchecked(bytes) })
@@ -136,10 +153,41 @@ impl FileSystemOs {
 
     /// # Errors
     ///
+    /// See [std::fs::read_to_string]
+    pub fn read_to_string(path: &Path) -> io::Result<String> {
+        let bytes = std::fs::read(path)?;
+        Self::validate_string(bytes)
+    }
+
+    /// # Errors
+    ///
     /// See [std::fs::metadata]
     #[inline]
     pub fn metadata(path: &Path) -> io::Result<FileMetadata> {
-        fs::metadata(path).map(FileMetadata::from)
+        cfg_if! {
+            if #[cfg(target_os = "windows")] {
+                let result = crate::windows::symlink_metadata(path)?;
+                if result.is_symlink {
+                    return fs::metadata(path).map(FileMetadata::from);
+                }
+                Ok(result.into())
+            } else if #[cfg(target_os = "linux")] {
+                use rustix::fs::{AtFlags, CWD, FileType, StatxFlags};
+                match rustix::fs::statx(CWD, path, AtFlags::STATX_DONT_SYNC, StatxFlags::TYPE) {
+                    Ok(statx) => {
+                        let file_type = FileType::from_raw_mode(statx.stx_mode.into());
+                        Ok(FileMetadata::new(file_type.is_file(), file_type.is_dir(), file_type.is_symlink()))
+                    }
+                    Err(rustix::io::Errno::NOSYS) => {
+                        // statx is not available (kernel < 4.11), fall back to fs::metadata
+                        fs::metadata(path).map(FileMetadata::from)
+                    }
+                    Err(err) => Err(err.into()),
+                }
+            } else {
+                fs::metadata(path).map(FileMetadata::from)
+            }
+        }
     }
 
     /// # Errors
@@ -147,7 +195,26 @@ impl FileSystemOs {
     /// See [std::fs::symlink_metadata]
     #[inline]
     pub fn symlink_metadata(path: &Path) -> io::Result<FileMetadata> {
-        fs::symlink_metadata(path).map(FileMetadata::from)
+        cfg_if! {
+            if #[cfg(target_os = "windows")] {
+                Ok(crate::windows::symlink_metadata(path)?.into())
+            } else if #[cfg(target_os = "linux")] {
+                use rustix::fs::{AtFlags, CWD, FileType, StatxFlags};
+                match rustix::fs::statx(CWD, path, AtFlags::SYMLINK_NOFOLLOW, StatxFlags::TYPE) {
+                    Ok(statx) => {
+                        let file_type = FileType::from_raw_mode(statx.stx_mode.into());
+                        Ok(FileMetadata::new(file_type.is_file(), file_type.is_dir(), file_type.is_symlink()))
+                    }
+                    Err(rustix::io::Errno::NOSYS) => {
+                        // statx is not available (kernel < 4.11), fall back to fs::symlink_metadata
+                        fs::symlink_metadata(path).map(FileMetadata::from)
+                    }
+                    Err(err) => Err(err.into()),
+                }
+            } else {
+                fs::symlink_metadata(path).map(FileMetadata::from)
+            }
+        }
     }
 
     /// # Errors
@@ -164,6 +231,14 @@ impl FileSystemOs {
             }
         }
     }
+
+    /// # Errors
+    ///
+    /// See [std::fs::canonicalize]
+    #[inline]
+    pub fn canonicalize(path: &Path) -> io::Result<PathBuf> {
+        fs::canonicalize(path)
+    }
 }
 
 impl FileSystem for FileSystemOs {
@@ -177,21 +252,26 @@ impl FileSystem for FileSystemOs {
         Self
     }
 
-    fn read_to_string(&self, path: &Path) -> io::Result<String> {
+    fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
         cfg_if! {
             if #[cfg(feature = "yarn_pnp")] {
                 if self.yarn_pnp {
                     return match VPath::from(path)? {
                         VPath::Zip(info) => {
-                            self.pnp_lru.read_to_string(info.physical_base_path(), info.zip_path)
+                            self.pnp_lru.read(info.physical_base_path(), info.zip_path)
                         }
-                        VPath::Virtual(info) => Self::read_to_string(&info.physical_base_path()),
-                        VPath::Native(path) => Self::read_to_string(&path),
+                        VPath::Virtual(info) => fs::read(info.physical_base_path()),
+                        VPath::Native(path) => fs::read(path),
                     }
                 }
             }
         }
-        Self::read_to_string(path)
+        fs::read(path)
+    }
+
+    fn read_to_string(&self, path: &Path) -> io::Result<String> {
+        let bytes = self.read(path)?;
+        Self::validate_string(bytes)
     }
 
     fn metadata(&self, path: &Path) -> io::Result<FileMetadata> {
@@ -232,6 +312,21 @@ impl FileSystem for FileSystemOs {
         }
         Self::read_link(path)
     }
+
+    fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
+        cfg_if! {
+            if #[cfg(feature = "yarn_pnp")] {
+                if self.yarn_pnp {
+                    return match VPath::from(path)? {
+                        VPath::Zip(info) => Self::canonicalize(&info.physical_base_path().join(info.zip_path)),
+                        VPath::Virtual(info) => Self::canonicalize(&info.physical_base_path()),
+                        VPath::Native(path) => Self::canonicalize(&path),
+                    }
+                }
+            }
+        }
+        Self::canonicalize(path)
+    }
 }
 
 #[test]
@@ -242,4 +337,22 @@ fn metadata() {
         "FileMetadata { is_file: true, is_dir: true, is_symlink: true }"
     );
     let _ = meta;
+}
+
+#[test]
+fn file_metadata_getters() {
+    let file_meta = FileMetadata::new(true, false, false);
+    assert!(file_meta.is_file());
+    assert!(!file_meta.is_dir());
+    assert!(!file_meta.is_symlink());
+
+    let dir_meta = FileMetadata::new(false, true, false);
+    assert!(!dir_meta.is_file());
+    assert!(dir_meta.is_dir());
+    assert!(!dir_meta.is_symlink());
+
+    let symlink_meta = FileMetadata::new(false, false, true);
+    assert!(!symlink_meta.is_file());
+    assert!(!symlink_meta.is_dir());
+    assert!(symlink_meta.is_symlink());
 }

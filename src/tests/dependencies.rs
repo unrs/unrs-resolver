@@ -1,7 +1,7 @@
 //! https://github.com/webpack/enhanced-resolve/blob/main/test/dependencies.test.js
 
 #[cfg(not(target_os = "windows"))] // MemoryFS's path separator is always `/` so the test will not pass in windows.
-mod windows {
+mod test {
     use std::path::PathBuf;
 
     use super::super::memory_fs::MemoryFS;
@@ -18,17 +18,6 @@ mod windows {
 
     #[test]
     fn test() {
-        let file_system = file_system();
-
-        let resolver = ResolverGeneric::new_with_file_system(
-            file_system,
-            ResolveOptions {
-                extensions: vec![".json".into(), ".js".into()],
-                modules: vec!["/modules".into(), "node_modules".into()],
-                ..ResolveOptions::default()
-            },
-        );
-
         let data = [
             (
                 "middle module request",
@@ -92,10 +81,19 @@ mod windows {
         ];
 
         for (name, context, request, result, file_dependencies, missing_dependencies) in data {
+            let file_system = file_system();
+            let resolver = ResolverGeneric::new_with_file_system(
+                file_system,
+                ResolveOptions {
+                    extensions: vec![".json".into(), ".js".into()],
+                    modules: vec!["/modules".into(), "node_modules".into()],
+                    ..ResolveOptions::default()
+                },
+            );
             let mut ctx = ResolveContext::default();
             let path = PathBuf::from(context);
             let resolved_path =
-                resolver.resolve_with_context(path, request, &mut ctx).map(|r| r.full_path());
+                resolver.resolve_with_context(path, request, None, &mut ctx).map(|r| r.full_path());
             assert_eq!(resolved_path, Ok(PathBuf::from(result)));
             let file_dependencies = file_dependencies.iter().map(PathBuf::from).collect();
             let missing_dependencies = missing_dependencies.iter().map(PathBuf::from).collect();

@@ -1,31 +1,3 @@
-> [!NOTE]
->
-> This is a fork of [oxc-resolver] and [rspack-resolver], and will be used in [eslint-plugin-import-x] and [eslint-import-resolver-typescript] cause 100% compatible with [enhanced-resolve] is the non-goal of [oxc-resolver] itself, we add [enhanced-resolve] specific features like [`pnp support`](https://github.com/web-infra-dev/rspack/issues/2236).
->
-> We also fix several bugs reported by [eslint-plugin-import-x] and [eslint-import-resolver-typescript] users:
->
-> - takes `paths` and `references` into account [at the same time](https://github.com/unrs/unrs-resolver/pull/12)
-> - `references` should [take higher priority](https://github.com/unrs/unrs-resolver/pull/13)
-> - support `pnpapi` core module and [package deep link](https://github.com/un-ts/eslint-plugin-import-x/issues/253)
-> - enable [more targets](https://github.com/unrs/unrs-resolver/pull/29) support
-> - absolute path aliasing [should not be skipped](https://github.com/import-js/eslint-import-resolver-typescript/issues/401)
-> - use [napi-postinstall] for [legacy npm versions](https://github.com/unrs/unrs-resolver/issues/56)
-> - Raspberry PI 4 aarch64 [compatibility issue](https://github.com/unrs/unrs-resolver/issues/64) and [import-js/eslint-import-resolver-typescript#406](https://github.com/import-js/eslint-import-resolver-typescript/issues/406) due to [mimalloc-safe]
-> - support `load_as_directory` for [`pnp` mode](https://github.com/import-js/eslint-import-resolver-typescript/issues/409)
-> - [resolve parent base url correctly](https://github.com/import-js/eslint-import-resolver-typescript/issues/437) by normalizing as absolute path
->
-> The list could be longer in the future, but we don't want to make it too long here.
->
-> We also sync with [oxc-resolver] and [rspack-resolver] regularly to keep up with the latest changes:
->
-> - `oxc-resolver`: [#15](https://github.com/unrs/unrs-resolver/pull/15), [#49](https://github.com/unrs/unrs-resolver/pull/49), [#62](https://github.com/unrs/unrs-resolver/pull/62), [#86](https://github.com/unrs/unrs-resolver/pull/86) and [#94](https://github.com/unrs/unrs-resolver/pull/94)
-> - `rspack-resolver`(planned): [#59](https://github.com/unrs/unrs-resolver/issues/59)
->
-> Last but not least, we prepare some bug fix PRs first on our side and PR back into upstream projects, and we will keep doing this in the future:
->
-> - `oxc-resolver`: [#84](https://github.com/unrs/unrs-resolver/pull/84) with [oxc-resolver#455](https://github.com/oxc-project/oxc-resolver/pull/455)
-> - `rspack-resolver`: [#7](https://github.com/unrs/unrs-resolver/pull/7) with [rspack-resolver#54](https://github.com/web-infra-dev/rspack-resolver/pull/54), which is eventually replaced by [oxc-resolver#443](https://github.com/oxc-project/oxc-resolver/pull/443)
-
 <div align="center">
 
 [![Crates.io][crates-badge]][crates-url]
@@ -42,7 +14,7 @@
 
 # UnRS Resolver
 
-Rust port of [enhanced-resolve].
+Rust port of [enhanced-resolve], [tsconfig-paths-webpack-plugin] and [tsconfck]
 
 - Released on [crates.io][crates-url] and [npm][npm-url].
 - Implements the [ESM](https://nodejs.org/api/esm.html#resolution-algorithm) and [CommonJS](https://nodejs.org/api/modules.html#all-together) module resolution algorithm specification.
@@ -51,6 +23,7 @@ Rust port of [enhanced-resolve].
   - support paths alias defined in `tsconfig.compilerOptions.paths`
   - support project references defined `tsconfig.references`
   - support [template variable ${configDir} for substitution of config files directory path](https://github.com/microsoft/TypeScript/pull/58042)
+- Built-in tsconfig discovery ([tsconfck])
 - Supports in-memory file system via the `FileSystem` trait.
 - Contains `tracing` instrumentation.
 
@@ -63,20 +36,48 @@ See `index.d.ts` for `resolveSync` and `ResolverFactory` API.
 Quick example:
 
 ```javascript
-import assert from 'node:assert';
-import path from 'node:path';
+import assert from "node:assert";
+import path from "node:path";
 
-import resolve, { ResolverFactory } from 'unrs-resolver';
+import resolve, { ResolverFactory } from "unrs-resolver";
 
 // `resolve`
-assert(resolve.sync(process.cwd(), './index.js').path, path.resolve('index.js'));
+assert(resolve.sync(process.cwd(), "./index.js").path, path.resolve("index.js"));
 
 // `ResolverFactory`
 const resolver = new ResolverFactory();
-assert(resolver.sync(process.cwd(), './index.js').path, path.resolve('index.js'));
+assert(resolver.sync(process.cwd(), "./index.js").path, path.resolve("index.js"));
 ```
 
-### Supports WASM
+#### File-based Resolution
+
+For file-based resolution with automatic tsconfig discovery, use `resolveFileSync` or `resolveFileAsync`:
+
+```javascript
+const resolver = new ResolverFactory();
+
+// Resolves from a file path (not directory)
+const result = resolver.resolveFileSync("/path/to/file.ts", "./module");
+
+// Async version
+const result = await resolver.resolveFileAsync("/path/to/file.ts", "./module");
+```
+
+**Key Differences:**
+
+- `sync(directory, specifier)` - Takes a **directory path**, uses manually configured tsconfig if provided
+- `resolveFileSync(file, specifier)` - Takes a **file path**, automatically discovers tsconfig.json by traversing parent directories
+
+**Why use `resolveFileSync`?**
+
+When resolving from a specific file (e.g., in bundlers, linters, or language servers), `resolveFileSync` automatically finds the correct `tsconfig.json` by:
+
+- Traversing parent directories from the file location
+- Respecting TypeScript project references
+- Honoring `include`, `exclude`, and `files` fields to determine which tsconfig applies
+- Ensuring tsconfig `paths` aliases work correctly based on the file's context
+
+#### Supports WASM
 
 See https://stackblitz.com/edit/unrs-resolver for usage example.
 
@@ -154,11 +155,11 @@ To support both CJS and ESM with the same cache:
 
 ```javascript
 const esmResolver = new ResolverFactory({
-  conditionNames: ['node', 'import'],
+  conditionNames: ["node", "import"],
 });
 
 const cjsResolver = esmResolver.cloneWithOptions({
-  conditionNames: ['node', 'require'],
+  conditionNames: ["node", "require"],
 });
 ```
 
@@ -202,8 +203,7 @@ See [index.d.ts](https://github.com/unrs/unrs-resolver/blob/main/napi/index.d.ts
 | aliasFields                           | []                        | A list of alias fields in description files                                                                                                               |
 | extensionAlias                        | {}                        | An object which maps extension to extension aliases                                                                                                       |
 | conditionNames                        | []                        | A list of exports field condition names                                                                                                                   |
-| descriptionFiles                      | ["package.json"]          | A list of description files to read from                                                                                                                  |
-| enforceExtension                      | false                     | Enforce that a extension from extensions must be used                                                                                                     |
+| enforceExtension                      | false                     | Enforce that an extension from extensions must be used                                                                                                    |
 | exportsFields                         | ["exports"]               | A list of exports fields in description files                                                                                                             |
 | extensions                            | [".js", ".json", ".node"] | A list of extensions which should be tried for files                                                                                                      |
 | fallback                              | {}                        | Same as `alias`, but only used if default resolving fails                                                                                                 |
@@ -211,7 +211,7 @@ See [index.d.ts](https://github.com/unrs/unrs-resolver/blob/main/napi/index.d.ts
 | fullySpecified                        | false                     | Request passed to resolve is already fully specified and extensions or main files are not resolved for it (they are still resolved for internal requests) |
 | mainFields                            | ["main"]                  | A list of main fields in description files                                                                                                                |
 | mainFiles                             | ["index"]                 | A list of main files in directories                                                                                                                       |
-| modules                               | ["node_modules"]          | A list of directories to resolve modules from, can be absolute path or folder name                                                                        |
+| modules                               | ["node_modules"]          | A list of directories to resolve modules from, can be absolute path or folder name. Absolute `NODE_PATH` entries are appended automatically when set.     |
 | resolveToContext                      | false                     | Resolve to a context instead of a file                                                                                                                    |
 | preferRelative                        | false                     | Prefer to resolve module requests as relative request and fallback to resolving as module                                                                 |
 | preferAbsolute                        | false                     | Prefer to resolve server-relative urls as absolute paths before falling back to resolve in roots                                                          |
@@ -225,13 +225,14 @@ See [index.d.ts](https://github.com/unrs/unrs-resolver/blob/main/napi/index.d.ts
 | Field               | Default | Description                                                                                                                                                                          |
 | ------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | tsconfig            | None    | TypeScript related config for resolver                                                                                                                                               |
-| tsconfig.configFile |         | A relative path to the tsconfig file based on `cwd`, or an absolute path of tsconfig file.                                                                                           |
+| tsconfig.configFile |         | A relative path to the tsconfig file based on `cwd`, or an absolute path to the tsconfig file.                                                                                       |
 | tsconfig.references | `[]`    | - 'auto': inherits from TypeScript config <br/> - `string []`: relative path (based on directory of the referencing tsconfig file) or absolute path of referenced project's tsconfig |
 
 ### Unimplemented Options
 
 | Field            | Default                     | Description                                                                                                                                   |
 | ---------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| descriptionFiles | ["package.json"]            | A list of description files to read from                                                                                                      |
 | cachePredicate   | function() { return true }; | A function which decides whether a request should be cached or not. An object is passed to the function with `path` and `request` properties. |
 | cacheWithContext | true                        | If unsafe cache is enabled, includes `request.context` in the cache key                                                                       |
 | plugins          | []                          | A list of additional resolve plugins which should be applied                                                                                  |
@@ -321,22 +322,15 @@ Irrelevant tests
 
 UnRS partially copies code from the following projects.
 
-| Project                                                                           | License                                                                      |
-| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [webpack/enhanced-resolve](https://github.com/webpack/enhanced-resolve)           | [MIT](https://github.com/webpack/enhanced-resolve/blob/main/LICENSE)         |
-| [dividab/tsconfig-paths](https://github.com/dividab/tsconfig-paths)               | [MIT](https://github.com/dividab/tsconfig-paths/blob/master/LICENSE)         |
-| [parcel-bundler/parcel](https://github.com/parcel-bundler/parcel)                 | [MIT](https://github.com/parcel-bundler/parcel/blob/v2/LICENSE)              |
-| [tmccombs/json-comments-rs](https://github.com/tmccombs/json-comments-rs)         | [Apache 2.0](https://github.com/tmccombs/json-comments-rs/blob/main/LICENSE) |
-| [oxc-project/oxc-resolver](https://github.com/oxc-project/oxc-resolver)           | [MIT](https://github.com/oxc-project/oxc-resolver/blob/main/LICENSE)         |
-| [web-infra-dev/rspack-resolver](https://github.com/web-infra-dev/rspack-resolver) | [MIT](https://github.com/web-infra-dev/rspack-resolver/blob/main/LICENSE)    |
+| Project                                                                   | License                                                                         |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [webpack/enhanced-resolve](https://github.com/webpack/enhanced-resolve)   | [MIT](https://github.com/webpack/enhanced-resolve/blob/main/LICENSE)            |
+| [dividab/tsconfig-paths](https://github.com/dividab/tsconfig-paths)       | [MIT](https://github.com/dividab/tsconfig-paths/blob/master/LICENSE)            |
+| [parcel-bundler/parcel](https://github.com/parcel-bundler/parcel)         | [MIT](https://github.com/parcel-bundler/parcel/blob/v2/LICENSE)                 |
+| [tmccombs/json-comments-rs](https://github.com/tmccombs/json-comments-rs) | [Apache 2.0](https://github.com/tmccombs/json-comments-rs/blob/main/LICENSE)    |
+| [dominikg/tsconfck](https://github.com/dominikg/tsconfck)                 | [MIT](https://github.com/dominikg/tsconfck/blob/main/packages/tsconfck/LICENSE) |
 
 [enhanced-resolve]: https://github.com/webpack/enhanced-resolve
-[oxc-resolver]: https://github.com/oxc-project/oxc-resolver
-[rspack-resolver]: https://github.com/web-infra-dev/rspack-resolver
-[eslint-plugin-import-x]: https://github.com/un-ts/eslint-plugin-import-x
-[eslint-import-resolver-typescript]: https://github.com/import-js/eslint-import-resolver-typescript
-[napi-postinstall]: https://github.com/un-ts/napi-postinstall
-[mimalloc-safe]: https://github.com/napi-rs/mimalloc-safe
 [tsconfig-paths-webpack-plugin]: https://github.com/dividab/tsconfig-paths-webpack-plugin
 [license-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [license-url]: https://github.com/unrs/unrs-resolver/blob/main/LICENSE
@@ -344,13 +338,14 @@ UnRS partially copies code from the following projects.
 [ci-url]: https://github.com/unrs/unrs-resolver/actions/workflows/ci.yml?query=event%3Apush+branch%3Amain
 [code-coverage-badge]: https://codecov.io/github/unrs/unrs-resolver/branch/main/graph/badge.svg
 [code-coverage-url]: https://codecov.io/gh/unrs/unrs-resolver
-[sponsors-badge]: https://img.shields.io/github/sponsors/JounQin
-[sponsors-url]: https://github.com/sponsors/JounQin
+[sponsors-badge]: https://img.shields.io/github/sponsors/Boshen
+[sponsors-url]: https://github.com/sponsors/Boshen
 [codspeed-badge]: https://img.shields.io/endpoint?url=https://codspeed.io/badge.json
 [codspeed-url]: https://codspeed.io/unrs/unrs-resolver
-[crates-badge]: https://img.shields.io/crates/d/unrs_resolver?label=crates.io
+[crates-badge]: https://img.shields.io/crates/dr/unrs_resolver
 [crates-url]: https://crates.io/crates/unrs_resolver
 [docs-badge]: https://img.shields.io/docsrs/unrs_resolver
-[docs-url]: https://docs.rs/unrs_resolver
+[docs-url]: https://docs.rs/unrs_resolver/latest/unrs_resolver/
 [npm-badge]: https://img.shields.io/npm/dw/unrs-resolver?label=npm
-[npm-url]: https://www.npmjs.com/package/unrs-resolver
+[npm-url]: https://npmx.dev/package/unrs-resolver
+[tsconfck]: https://github.com/dominikg/tsconfck

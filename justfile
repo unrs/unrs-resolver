@@ -1,5 +1,8 @@
 #!/usr/bin/env -S just --justfile
 
+set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
+set shell := ["bash", "-cu"]
+
 _default:
   @just --list -u
 
@@ -10,13 +13,14 @@ alias r := ready
 # or install via `cargo install cargo-binstall`
 # Initialize the project by installing all the necessary tools.
 init:
-  cargo binstall cargo-shear dprint typos-cli watchexec-cli -y
+  cargo binstall cargo-shear typos-cli watchexec-cli -y
+  rustup target add s390x-unknown-linux-gnu
 
 install:
   pnpm install
-  cd fixtures/pnp && yarn
-  cd fixtures/global-pnp && yarn
-  cd fixtures/yarn && yarn
+  cd fixtures/pnp; yarn
+  cd fixtures/pnp/global-pnp; yarn
+  cd fixtures/yarn; yarn
 
 # When ready, run the same CI commands
 ready:
@@ -36,22 +40,23 @@ watch *args='':
 watch-check:
   just watch "'cargo check; cargo clippy'"
 
-watch-example *args='':
-  just watch "cargo run --example resolver -- {{args}}"
+watch-example target *args='':
+  just watch "cargo run --example {{target}} -- {{args}}"
 
 # Run the example
-example *args='':
-  cargo run --example resolver -- {{args}}
+example target *args='':
+  cargo run --example {{target}} -- {{args}}
 
 # Format all files
 fmt:
   cargo shear --fix # remove all unused dependencies
   cargo fmt --all
-  dprint fmt
+  node --run fmt
 
 # Run cargo check
 check:
   cargo check --all-features --all-targets
+  cargo check --target s390x-unknown-linux-gnu
 
 # Run all the tests
 test:
@@ -59,7 +64,7 @@ test:
   cargo test --all-features
   node --run build
   node --run test
-  cd fixtures/pnp && yarn test
+  cd fixtures/pnp; yarn test
 
 # Lint the whole project
 lint:
@@ -79,7 +84,7 @@ benchmark:
 
 # Run cargo-fuzz
 fuzz:
-  cd fuzz && cargo +nightly fuzz run --sanitizer none resolver -- -only_ascii=1 -max_total_time=900
+  cd fuzz; cargo +nightly fuzz run --sanitizer none resolver -- -only_ascii=1 -max_total_time=900
 
 # Manual Release
 release:

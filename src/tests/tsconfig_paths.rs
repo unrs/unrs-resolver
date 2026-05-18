@@ -2,22 +2,20 @@
 //!
 //! Fixtures copied from <https://github.com/parcel-bundler/parcel/tree/v2/packages/utils/node-resolver-core/test/fixture/tsconfig>.
 
-use std::path::{Path, PathBuf};
-
 use crate::{
-    JSONError, ResolveError, ResolveOptions, Resolver, TsConfig, TsconfigOptions,
+    JSONError, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
     TsconfigReferences,
 };
 
 // <https://github.com/parcel-bundler/parcel/blob/b6224fd519f95e68d8b93ba90376fd94c8b76e69/packages/utils/node-resolver-rs/src/lib.rs#L2303>
-#[test]
-fn tsconfig_resolve() {
+pub fn tsconfig_resolve_impl(tsconfig_discovery: bool) {
     let f = super::fixture_root().join("tsconfig");
 
     #[rustfmt::skip]
     let pass = [
         (f.clone(), None, "ts-path", f.join("src/foo.js")),
         (f.join("nested"), None, "ts-path", f.join("nested/test.js")),
+        (f.join("cases/extends-paths-outside"), Some("src/index.js"), "ts-path", f.join("src/foo.js")),
         (f.join("cases/index"), None, "foo", f.join("node_modules/tsconfig-index/foo.js")),
         // This requires reading package.json.tsconfig field
         // (f.join("cases/field"), "foo", f.join("node_modules/tsconfig-field/foo.js"))
@@ -27,38 +25,73 @@ fn tsconfig_resolve() {
         (f.join("cases/extends-paths"), Some("src"), "@/index", f.join("cases/extends-paths/src/index.js")),
         (f.join("cases/extends-multiple"), None, "foo", f.join("cases/extends-multiple/foo.js")),
         (f.join("cases/absolute-alias"), None, "/images/foo.js", f.join("cases/absolute-alias/public/images/foo.ts")),
+        (f.join("cases/references-extend"), Some("src/index.ts"), "ts-path", f.join("src/foo.js")),
+        // Support `base_url` 3rd case <https://github.com/microsoft/TypeScript/issues/62207>
+        (f.join("cases/base-url"), Some("src/index.ts"), "foo.js", f.join("cases/base-url/src/foo.js")),
     ];
 
     for (dir, subdir, request, expected) in pass {
         let resolver = Resolver::new(ResolveOptions {
-            tsconfig: Some(TsconfigOptions {
-                config_file: dir.join("tsconfig.json"),
-                references: TsconfigReferences::Auto,
+            tsconfig: Some(if tsconfig_discovery {
+                TsconfigDiscovery::Auto
+            } else {
+                TsconfigDiscovery::Manual(TsconfigOptions {
+                    config_file: dir.join("tsconfig.json"),
+                    references: TsconfigReferences::Auto,
+                })
             }),
             extension_alias: vec![(".js".into(), vec![".js".into(), ".ts".into(), ".tsx".into()])],
             ..ResolveOptions::default()
         });
-        let path = subdir.map_or(dir.clone(), |subdir| dir.join(subdir));
-        let resolved_path = resolver.resolve(&path, request).map(|f| f.full_path());
-        assert_eq!(resolved_path, Ok(expected), "{request} {path:?}");
+        let path = subdir.map_or_else(|| dir.clone(), |subdir| dir.join(subdir));
+        let resolved_path = resolver.resolve_file(&path, request).map(|f| f.full_path());
+        assert_eq!(resolved_path, Ok(expected), "{request} {path:?} {tsconfig_discovery}");
     }
 
-    #[rustfmt::skip]
     let data = [
-        (f.join("node_modules/tsconfig-not-used"), "ts-path", Ok(f.join("src/foo.js"))),
+        (
+            f.join("node_modules/tsconfig-not-used"),
+            "ts-path",
+            f.join("tsconfig.json"),
+            Err(ResolveError::NotFound("ts-path".to_string())),
+        ),
+        (
+            f.join("cases/extends-not-found"),
+            "ts-path",
+            f.join("cases").join("extends-not-found").join("tsconfig.json"),
+            Err(ResolveError::TsconfigNotFound(
+                f.join("cases").join("extends-not-found").join("not-found"),
+            )),
+        ),
+        // no `base_url` <https://github.com/microsoft/TypeScript/issues/62207>
+        (
+            f.clone(),
+            "src/foo.js",
+            f.join("tsconfig.json"),
+            Err(ResolveError::NotFound("src/foo.js".to_string())),
+        ),
     ];
 
-    let resolver = Resolver::new(ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
-            config_file: f.join("tsconfig.json"),
-            references: TsconfigReferences::Auto,
-        }),
-        ..ResolveOptions::default()
-    });
-    for (path, request, expected) in data {
-        let resolution = resolver.resolve(&path, request).map(|f| f.full_path());
+    for (path, request, tsconfig, expected) in data {
+        let resolver = Resolver::new(ResolveOptions {
+            tsconfig: Some(if tsconfig_discovery {
+                TsconfigDiscovery::Auto
+            } else {
+                TsconfigDiscovery::Manual(TsconfigOptions {
+                    config_file: tsconfig,
+                    references: TsconfigReferences::Auto,
+                })
+            }),
+            ..ResolveOptions::default()
+        });
+        let resolution = resolver.resolve_file(&path, request).map(|f| f.full_path());
         assert_eq!(resolution, expected, "{path:?} {request}");
     }
+}
+
+#[test]
+pub fn tsconfig_resolve() {
+    tsconfig_resolve_impl(/* tsconfig_discovery */ false);
 }
 
 #[test]
@@ -66,14 +99,14 @@ fn tsconfig_fallthrough() {
     let f = super::fixture_root().join("tsconfig");
 
     let resolver = Resolver::new(ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
             config_file: f.join("tsconfig.json"),
             references: TsconfigReferences::Auto,
-        }),
+        })),
         ..ResolveOptions::default()
     });
 
-    let resolved_path = resolver.resolve(&f, "/");
+    let resolved_path = resolver.resolve_file(&f, "/");
     assert_eq!(resolved_path, Err(ResolveError::NotFound("/".into())));
 }
 
@@ -82,14 +115,14 @@ fn json_with_comments() {
     let f = super::fixture_root().join("tsconfig/cases/trailing-comma");
 
     let resolver = Resolver::new(ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
             config_file: f.join("tsconfig.json"),
             references: TsconfigReferences::Auto,
-        }),
+        })),
         ..ResolveOptions::default()
     });
 
-    let resolved_path = resolver.resolve(&f, "foo").map(|f| f.full_path());
+    let resolved_path = resolver.resolve_file(&f, "foo").map(|f| f.full_path());
     assert_eq!(resolved_path, Ok(f.join("bar.js")));
 }
 
@@ -98,14 +131,14 @@ fn with_bom() {
     let f = super::fixture_root().join("tsconfig/cases/with-bom");
 
     let resolver = Resolver::new(ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
             config_file: f.join("tsconfig.json"),
             references: TsconfigReferences::Auto,
-        }),
+        })),
         ..ResolveOptions::default()
     });
 
-    let resolved_path = resolver.resolve(&f, "foo").map(|f| f.full_path());
+    let resolved_path = resolver.resolve_file(&f, "foo").map(|f| f.full_path());
     assert_eq!(resolved_path, Ok(f.join("bar.js")));
 }
 
@@ -114,14 +147,14 @@ fn broken() {
     let f = super::fixture_root().join("tsconfig");
 
     let resolver = Resolver::new(ResolveOptions {
-        tsconfig: Some(TsconfigOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
             config_file: f.join("tsconfig_broken.json"),
             references: TsconfigReferences::Auto,
-        }),
+        })),
         ..ResolveOptions::default()
     });
 
-    let resolved_path = resolver.resolve(&f, "/");
+    let resolved_path = resolver.resolve_file(&f, "/");
     let error = ResolveError::Json(JSONError {
         path: f.join("tsconfig_broken.json"),
         message: String::from("EOF while parsing an object at line 2 column 0"),
@@ -131,108 +164,28 @@ fn broken() {
     assert_eq!(resolved_path, Err(error));
 }
 
-// <https://github.com/parcel-bundler/parcel/blob/c8f5c97a01f643b4d5c333c02d019ef2618b44a5/packages/utils/node-resolver-rs/src/tsconfig.rs#L193C12-L193C12>
 #[test]
-fn test_paths() {
-    let path = Path::new("/foo/tsconfig.json");
-    let mut tsconfig_json = serde_json::json!({
-        "compilerOptions": {
-            "paths": {
-                "jquery": ["node_modules/jquery/dist/jquery"],
-                "*": ["generated/*"],
-                "bar/*": ["test/*"],
-                "bar/baz/*": ["baz/*", "yo/*"],
-                "@/components/*": ["components/*"],
-                "url": ["node_modules/my-url"],
-            }
-        }
-    })
-    .to_string();
-    let tsconfig = TsConfig::parse(true, path, &mut tsconfig_json).unwrap().build();
+fn empty() {
+    let f = super::fixture_root().join("tsconfig/cases/empty");
 
-    let data = [
-        ("jquery", vec!["/foo/node_modules/jquery/dist/jquery"]),
-        ("test", vec!["/foo/generated/test"]),
-        ("test/hello", vec!["/foo/generated/test/hello"]),
-        ("bar/hi", vec!["/foo/test/hi"]),
-        ("bar/baz/hi", vec!["/foo/baz/hi", "/foo/yo/hi"]),
-        ("@/components/button", vec!["/foo/components/button"]),
-        ("./jquery", vec![]),
-        ("url", vec!["/foo/node_modules/my-url"]),
-    ];
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("tsconfig.json"),
+            references: TsconfigReferences::Auto,
+        })),
+        ..ResolveOptions::default()
+    });
 
-    for (specifier, expected) in data {
-        let paths = tsconfig.resolve_path_alias(specifier);
-        let expected = expected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
-        assert_eq!(paths, expected, "{specifier}");
-    }
-}
-
-// <https://github.com/parcel-bundler/parcel/blob/c8f5c97a01f643b4d5c333c02d019ef2618b44a5/packages/utils/node-resolver-rs/src/tsconfig.rs#L233C6-L233C19>
-#[test]
-fn test_base_url() {
-    let path = Path::new("/foo/tsconfig.json");
-    let mut tsconfig_json = serde_json::json!({
-        "compilerOptions": {
-            "baseUrl": "./src"
-        }
-    })
-    .to_string();
-    let tsconfig = TsConfig::parse(true, path, &mut tsconfig_json).unwrap().build();
-
-    let data = [
-        ("foo", vec!["/foo/src/foo"]),
-        ("components/button", vec!["/foo/src/components/button"]),
-        ("./jquery", vec![]),
-    ];
-
-    for (specifier, expected) in data {
-        let paths = tsconfig.resolve_path_alias(specifier);
-        let expected = expected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
-        assert_eq!(paths, expected, "{specifier}");
-    }
-}
-
-// <https://github.com/parcel-bundler/parcel/blob/c8f5c97a01f643b4d5c333c02d019ef2618b44a5/packages/utils/node-resolver-rs/src/tsconfig.rs#L252>
-#[test]
-fn test_paths_and_base_url() {
-    let path = Path::new("/foo/tsconfig.json");
-    let mut tsconfig_json = serde_json::json!({
-        "compilerOptions": {
-            "baseUrl": "./src",
-            "paths": {
-                "*": ["generated/*"],
-                "bar/*": ["test/*"],
-                "bar/baz/*": ["baz/*", "yo/*"],
-                "@/components/*": ["components/*"]
-            }
-        }
-    })
-    .to_string();
-    let tsconfig = TsConfig::parse(true, path, &mut tsconfig_json).unwrap().build();
-
-    let data = [
-        ("test", vec!["/foo/src/generated/test", "/foo/src/test"]),
-        ("test/hello", vec!["/foo/src/generated/test/hello", "/foo/src/test/hello"]),
-        ("bar/hi", vec!["/foo/src/test/hi", "/foo/src/bar/hi"]),
-        ("bar/baz/hi", vec!["/foo/src/baz/hi", "/foo/src/yo/hi", "/foo/src/bar/baz/hi"]),
-        ("@/components/button", vec!["/foo/src/components/button", "/foo/src/@/components/button"]),
-        ("./jquery", vec![]),
-    ];
-
-    for (specifier, expected) in data {
-        let paths = tsconfig.resolve_path_alias(specifier);
-        let expected = expected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
-        assert_eq!(paths, expected, "{specifier}");
-    }
+    let resolved_path = resolver.resolve_file(f.join("index.js"), "./index").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f.join("index.js")));
 }
 
 #[test]
 fn test_merge_tsconfig() {
     let resolver = Resolver::default();
-    let dir = super::fixture_root().join("tsconfig/cases/merge_compiler_options");
+    let dir = super::fixture_root().join("tsconfig/cases/merge-compiler-options");
     let resolution = resolver.resolve_tsconfig(&dir).expect("resolved");
-    let compiler_options = resolution.compiler_options();
+    let compiler_options = &resolution.compiler_options;
     assert_eq!(compiler_options.experimental_decorators, Some(true));
     assert_eq!(compiler_options.jsx, Some("react-jsx".to_string()));
     assert_eq!(compiler_options.jsx_factory, Some("h".to_string()));
@@ -245,9 +198,9 @@ fn test_merge_tsconfig() {
 #[test]
 fn test_no_merge_tsconfig() {
     let resolver = Resolver::default();
-    let dir = super::fixture_root().join("tsconfig/cases/no_merge_compiler_options");
+    let dir = super::fixture_root().join("tsconfig/cases/no-merge-compiler-options");
     let resolution = resolver.resolve_tsconfig(&dir).expect("resolved");
-    let compiler_options = resolution.compiler_options();
+    let compiler_options = &resolution.compiler_options;
     assert_eq!(compiler_options.experimental_decorators, Some(true));
     assert_eq!(compiler_options.jsx, Some("react-jsx".to_string()));
     assert_eq!(compiler_options.jsx_factory, Some("h".to_string()));
@@ -260,7 +213,7 @@ fn test_no_merge_tsconfig() {
 #[test]
 fn test_template_variable() {
     let f = super::fixture_root().join("tsconfig");
-    let f2 = f.join("cases").join("paths_template_variable");
+    let f2 = f.join("cases").join("paths-template-variable");
 
     #[rustfmt::skip]
     let pass = [
@@ -279,13 +232,14 @@ fn test_template_variable() {
 
     for (dir, tsconfig, request, expected) in pass {
         let resolver = Resolver::new(ResolveOptions {
-            tsconfig: Some(TsconfigOptions {
+            tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
                 config_file: dir.join(tsconfig),
                 references: TsconfigReferences::Auto,
-            }),
+            })),
             ..ResolveOptions::default()
         });
-        let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
+        let resolved_path =
+            resolver.resolve_file(dir.join("src").join("foo.js"), request).map(|f| f.full_path());
         assert_eq!(resolved_path, Ok(expected), "{request} {tsconfig} {dir:?}");
     }
 }
@@ -303,13 +257,13 @@ fn test_paths_nested_base() {
 
     for (dir, tsconfig, request, expected) in pass {
         let resolver = Resolver::new(ResolveOptions {
-            tsconfig: Some(TsconfigOptions {
+            tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
                 config_file: dir.parent().unwrap().join(tsconfig),
                 references: TsconfigReferences::Auto,
-            }),
+            })),
             ..ResolveOptions::default().with_extension(String::from(".ts"))
         });
-        let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
+        let resolved_path = resolver.resolve_file(&dir, request).map(|f| f.full_path());
         assert_eq!(resolved_path, Ok(expected), "{request} {tsconfig} {dir:?}");
     }
 }
@@ -327,15 +281,63 @@ fn test_parent_base_url() {
 
     for (dir, tsconfig, request, expected) in pass {
         let resolver = Resolver::new(ResolveOptions {
-            tsconfig: Some(TsconfigOptions {
+            tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
                 config_file: dir.parent().unwrap().join(tsconfig),
                 references: TsconfigReferences::Auto,
-            }),
+            })),
             ..ResolveOptions::default().with_extension(String::from(".ts"))
         });
-        let resolved_path = resolver.resolve(&dir, request).map(|f| f.full_path());
+        let resolved_path = resolver.resolve_file(&dir, request).map(|f| f.full_path());
         assert_eq!(resolved_path, expected, "{request} {tsconfig} {dir:?}");
     }
+}
+
+#[test]
+fn test_tsconfig_mixed_root_non_root_cache() {
+    let f = super::fixture_root().join("tsconfig");
+    let f2 = f.join("cases").join("simple-paths");
+
+    // NOTE: should remove this line before merging as it's not thread safe
+    std::env::set_current_dir(&f2).unwrap();
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+    resolver.cache.get_tsconfig(false, &f2.join("tsconfig.json"), |_| Ok(())).unwrap();
+    let resolved_path =
+        resolver.resolve_file(f2.join("foo.ts"), "bar/index.ts").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f2.join("bar/index.ts")));
+}
+
+#[test]
+fn test_tsconfig_mixed_root_non_root_cache2() {
+    let f = super::fixture_root().join("tsconfig");
+    let f2 = f.join("cases").join("extends-paths");
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+    resolver.cache.get_tsconfig(true, &f2.join("tsconfig.base.json"), |_| Ok(())).unwrap();
+    let resolved_path =
+        resolver.resolve_file(f2.join("test.ts"), "@/index.js").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f2.join("src/index.js")));
+}
+
+#[test]
+fn test_tsconfig_mixed_root_non_root_cache3() {
+    let f = super::fixture_root().join("tsconfig");
+    let f2 = f.join("cases").join("extends-paths");
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+    resolver.cache.get_tsconfig(false, &f2.join("tsconfig.json"), |_| Ok(())).unwrap();
+    let resolved_path =
+        resolver.resolve_file(f2.join("test.ts"), "@/index.js").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f2.join("src/index.js")));
 }
 
 #[cfg(not(target_os = "windows"))] // MemoryFS's path separator is always `/` so the test will not pass in windows.
@@ -344,7 +346,8 @@ mod windows_test {
 
     use super::super::memory_fs::MemoryFS;
     use crate::{
-        ResolveError, ResolveOptions, ResolverGeneric, TsconfigOptions, TsconfigReferences,
+        ResolveError, ResolveOptions, ResolverGeneric, TsconfigDiscovery, TsconfigOptions,
+        TsconfigReferences,
     };
 
     struct OneTest {
@@ -400,10 +403,10 @@ mod windows_test {
 
             let mut options = ResolveOptions {
                 extensions: self.extensions.clone(),
-                tsconfig: Some(TsconfigOptions {
+                tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
                     config_file: root.join("tsconfig.json"),
                     references: TsconfigReferences::Auto,
-                }),
+                })),
                 ..ResolveOptions::default()
             };
             if let Some(main_fields) = &self.main_fields {

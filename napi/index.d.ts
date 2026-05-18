@@ -5,12 +5,42 @@ export declare class ResolverFactory {
   static default(): ResolverFactory
   /** Clone the resolver using the same underlying cache. */
   cloneWithOptions(options: NapiResolveOptions): ResolverFactory
-  /** Clear the underlying cache. */
+  /**
+   * Clear the underlying cache.
+   *
+   * Warning: The caller must ensure that there're no ongoing resolution operations when calling this method. Otherwise, it may cause those operations to return an incorrect result.
+   */
   clearCache(): void
   /** Synchronously resolve `specifier` at an absolute path to a `directory`. */
   sync(directory: string, request: string): ResolveResult
   /** Asynchronously resolve `specifier` at an absolute path to a `directory`. */
   async(directory: string, request: string): Promise<ResolveResult>
+  /**
+   * Synchronously resolve `specifier` at an absolute path to a `file`.
+   *
+   * This method automatically discovers tsconfig.json by traversing parent directories.
+   */
+  resolveFileSync(file: string, request: string): ResolveResult
+  /**
+   * Asynchronously resolve `specifier` at an absolute path to a `file`.
+   *
+   * This method automatically discovers tsconfig.json by traversing parent directories.
+   */
+  resolveFileAsync(file: string, request: string): Promise<ResolveResult>
+  /**
+   * Synchronously resolve `specifier` for TypeScript declaration files.
+   *
+   * `file` is the absolute path to the containing file.
+   * Uses TypeScript's `moduleResolution: "bundler"` algorithm.
+   */
+  resolveDtsSync(file: string, request: string): ResolveResult
+  /**
+   * Asynchronously resolve `specifier` for TypeScript declaration files.
+   *
+   * `file` is the absolute path to the containing file.
+   * Uses TypeScript's `moduleResolution: "bundler"` algorithm.
+   */
+  resolveDtsAsync(file: string, request: string): Promise<ResolveResult>
 }
 
 /** Node.js builtin module when `Options::builtin_modules` is enabled. */
@@ -52,11 +82,11 @@ export declare const enum ModuleType {
  */
 export interface NapiResolveOptions {
   /**
-   * Path to TypeScript configuration file.
+   * Discover tsconfig automatically or use the specified tsconfig.json path.
    *
    * Default `None`
    */
-  tsconfig?: TsconfigOptions
+  tsconfig?: 'auto' | TsconfigOptions
   /**
    * Alias for [ResolveOptions::alias] and [ResolveOptions::fallback].
    *
@@ -82,12 +112,6 @@ export interface NapiResolveOptions {
    * Default `[]`
    */
   conditionNames?: Array<string>
-  /**
-   * The JSON files to use for descriptions. (There was once a `bower.json`.)
-   *
-   * Default `["package.json"]`
-   */
-  descriptionFiles?: Array<string>
   /**
    * If true, it will not allow extension-less files.
    * So by default `require('./foo')` works if `./foo` has a `.js` extension,
@@ -202,6 +226,15 @@ export interface NapiResolveOptions {
    */
   symlinks?: boolean
   /**
+   * Whether to read the `NODE_PATH` environment variable and append its entries to `modules`.
+   *
+   * `NODE_PATH` is a deprecated Node.js feature that is not part of ESM resolution.
+   * Set this to `false` to disable the behavior.
+   *
+   * Default `true`
+   */
+  nodePath?: boolean
+  /**
    * Whether to parse [module.builtinModules](https://nodejs.org/api/module.html#modulebuiltinmodules) or not.
    * For example, "zlib" will throw [crate::ResolveError::Builtin] when set to true.
    *
@@ -273,7 +306,6 @@ export interface TsconfigOptions {
    * Support for Typescript Project References.
    *
    * * `'auto'`: use the `references` field from tsconfig of `config_file`.
-   * * `string[]`: manually provided relative or absolute path.
    */
-  references?: 'auto' | string[]
+  references?: 'auto'
 }

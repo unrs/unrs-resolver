@@ -1,0 +1,25 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "allowJs": true,
+    "paths": {
+      "@/*": ["./aliased/*"]
+    }
+  },
+  "references": [
+    {
+      "path": "../project-a/conf.json"
+    },
+    {
+      "path": "../project-b"
+    },
+    {
+      "path": "../project-c/tsconfig.json"
+    },
+    {
+      "path": "../../paths-template-variable/tsconfig.json"
+    }
+  ],
+  "include": ["**/*"]
+}

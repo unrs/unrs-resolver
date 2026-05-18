@@ -39,7 +39,7 @@ if (__nodeFs.existsSync(__wasmDebugFilePath)) {
   __wasmFilePath = __wasmDebugFilePath
 } else if (!__nodeFs.existsSync(__wasmFilePath)) {
   try {
-    __wasmFilePath = __nodePath.resolve('@unrs/resolver-binding-wasm32-wasi')
+    __wasmFilePath = require.resolve('@unrs/resolver-binding-wasm32-wasi/resolver.wasm32-wasi.wasm')
   } catch {
     throw new Error('Cannot find resolver.wasm32-wasi.wasm file, and @unrs/resolver-binding-wasm32-wasi package is not installed.')
   }
@@ -82,7 +82,7 @@ const { instance: __napiInstance, module: __wasiModule, napiModule: __napiModule
       const kHandle = Object.getOwnPropertySymbols(worker).find(s =>
         s.toString().includes("kHandle")
       );
-      if (kPublicPort) {
+      if (kHandle) {
         worker[kHandle].ref = () => {};
       }
 

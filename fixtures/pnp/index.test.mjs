@@ -8,5 +8,6 @@ test('resolver', () => {
   const resolver = new ResolverFactory()
   const directory = import.meta.dirname
   const resolution = resolver.sync(directory, 'is-even')
+  console.log(resolution)
   assert.strictEqual(resolution.path, pnpapi.resolveRequest('is-even', directory))
 })

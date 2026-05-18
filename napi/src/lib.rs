@@ -10,9 +10,11 @@ use std::{
     sync::Arc,
 };
 
-use napi::{Task, bindgen_prelude::AsyncTask};
+use napi::{Either, Task, bindgen_prelude::AsyncTask};
 use napi_derive::napi;
-use unrs_resolver::{ResolveError, ResolveOptions, Resolver};
+use unrs_resolver::{
+    Resolution, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
+};
 
 use self::options::{NapiResolveOptions, StrOrStrList};
 
@@ -50,36 +52,6 @@ pub struct Builtin {
     /// `fs` -> `false`.
     /// `node:fs` returns `true`.
     pub is_runtime_module: bool,
-}
-
-fn resolve(resolver: &Resolver, path: &Path, request: &str) -> ResolveResult {
-    match resolver.resolve(path, request) {
-        Ok(resolution) => ResolveResult {
-            path: Some(resolution.full_path().to_string_lossy().to_string()),
-            error: None,
-            builtin: None,
-            module_type: resolution.module_type().map(ModuleType::from),
-            package_json_path: resolution
-                .package_json()
-                .and_then(|p| p.path().to_str())
-                .map(|p| p.to_string()),
-        },
-        Err(err) => {
-            let error = err.to_string();
-            ResolveResult {
-                path: None,
-                builtin: match err {
-                    ResolveError::Builtin { resolved, is_runtime_module } => {
-                        Some(Builtin { resolved, is_runtime_module })
-                    }
-                    _ => None,
-                },
-                module_type: None,
-                error: Some(error),
-                package_json_path: None,
-            }
-        }
-    }
 }
 
 #[napi(string_enum = "lowercase")]
@@ -131,6 +103,46 @@ impl Task for ResolveTask {
     }
 }
 
+pub struct ResolveFileTask {
+    resolver: Arc<Resolver>,
+    file: PathBuf,
+    request: String,
+}
+
+#[napi]
+impl Task for ResolveFileTask {
+    type JsValue = ResolveResult;
+    type Output = ResolveResult;
+
+    fn compute(&mut self) -> napi::Result<Self::Output> {
+        Ok(resolve_file(&self.resolver, &self.file, &self.request))
+    }
+
+    fn resolve(&mut self, _: napi::Env, result: Self::Output) -> napi::Result<Self::JsValue> {
+        Ok(result)
+    }
+}
+
+pub struct ResolveDtsTask {
+    resolver: Arc<Resolver>,
+    file: PathBuf,
+    request: String,
+}
+
+#[napi]
+impl Task for ResolveDtsTask {
+    type JsValue = ResolveResult;
+    type Output = ResolveResult;
+
+    fn compute(&mut self) -> napi::Result<Self::Output> {
+        Ok(resolve_dts(&self.resolver, &self.file, &self.request))
+    }
+
+    fn resolve(&mut self, _: napi::Env, result: Self::Output) -> napi::Result<Self::JsValue> {
+        Ok(result)
+    }
+}
+
 #[napi]
 pub struct ResolverFactory {
     resolver: Arc<Resolver>,
@@ -139,13 +151,16 @@ pub struct ResolverFactory {
 #[napi]
 impl ResolverFactory {
     #[napi(constructor)]
-    pub fn new(options: Option<NapiResolveOptions>) -> Self {
+    pub fn new(options: Option<NapiResolveOptions>) -> napi::Result<Self> {
         #[cfg(feature = "tracing-subscriber")]
         {
             tracing::init_tracing();
         }
-        let options = options.map_or_else(ResolveOptions::default, Self::normalize_options);
-        Self { resolver: Arc::new(Resolver::new(options)) }
+        let options = match options {
+            Some(op) => Self::normalize_options(op)?,
+            None => ResolveOptions::default(),
+        };
+        Ok(Self { resolver: Arc::new(Resolver::new(options)) })
     }
 
     #[napi]
@@ -156,13 +171,15 @@ impl ResolverFactory {
 
     /// Clone the resolver using the same underlying cache.
     #[napi]
-    pub fn clone_with_options(&self, options: NapiResolveOptions) -> Self {
-        Self {
-            resolver: Arc::new(self.resolver.clone_with_options(Self::normalize_options(options))),
-        }
+    pub fn clone_with_options(&self, options: NapiResolveOptions) -> napi::Result<Self> {
+        Ok(Self {
+            resolver: Arc::new(self.resolver.clone_with_options(Self::normalize_options(options)?)),
+        })
     }
 
     /// Clear the underlying cache.
+    ///
+    /// Warning: The caller must ensure that there're no ongoing resolution operations when calling this method. Otherwise, it may cause those operations to return an incorrect result.
     #[napi]
     pub fn clear_cache(&self) {
         self.resolver.clear_cache();
@@ -185,12 +202,66 @@ impl ResolverFactory {
         AsyncTask::new(ResolveTask { resolver, directory: path, request })
     }
 
-    fn normalize_options(op: NapiResolveOptions) -> ResolveOptions {
+    /// Synchronously resolve `specifier` at an absolute path to a `file`.
+    ///
+    /// This method automatically discovers tsconfig.json by traversing parent directories.
+    #[allow(clippy::needless_pass_by_value)]
+    #[napi]
+    pub fn resolve_file_sync(&self, file: String, request: String) -> ResolveResult {
+        let path = PathBuf::from(file);
+        resolve_file(&self.resolver, &path, &request)
+    }
+
+    /// Asynchronously resolve `specifier` at an absolute path to a `file`.
+    ///
+    /// This method automatically discovers tsconfig.json by traversing parent directories.
+    #[allow(clippy::needless_pass_by_value)]
+    #[napi]
+    pub fn resolve_file_async(&self, file: String, request: String) -> AsyncTask<ResolveFileTask> {
+        let path = PathBuf::from(file);
+        let resolver = self.resolver.clone();
+        AsyncTask::new(ResolveFileTask { resolver, file: path, request })
+    }
+
+    /// Synchronously resolve `specifier` for TypeScript declaration files.
+    ///
+    /// `file` is the absolute path to the containing file.
+    /// Uses TypeScript's `moduleResolution: "bundler"` algorithm.
+    #[allow(clippy::needless_pass_by_value)]
+    #[napi]
+    pub fn resolve_dts_sync(&self, file: String, request: String) -> ResolveResult {
+        let path = PathBuf::from(file);
+        resolve_dts(&self.resolver, &path, &request)
+    }
+
+    /// Asynchronously resolve `specifier` for TypeScript declaration files.
+    ///
+    /// `file` is the absolute path to the containing file.
+    /// Uses TypeScript's `moduleResolution: "bundler"` algorithm.
+    #[allow(clippy::needless_pass_by_value)]
+    #[napi]
+    pub fn resolve_dts_async(&self, file: String, request: String) -> AsyncTask<ResolveDtsTask> {
+        let path = PathBuf::from(file);
+        let resolver = self.resolver.clone();
+        AsyncTask::new(ResolveDtsTask { resolver, file: path, request })
+    }
+
+    fn normalize_options(op: NapiResolveOptions) -> napi::Result<ResolveOptions> {
         let default = ResolveOptions::default();
         // merging options
-        ResolveOptions {
+        Ok(ResolveOptions {
             cwd: None,
-            tsconfig: op.tsconfig.map(|tsconfig| tsconfig.into()),
+            tsconfig: op
+                .tsconfig
+                .map(|value| -> napi::Result<_> {
+                    match value {
+                        Either::A(_) => Ok(TsconfigDiscovery::Auto),
+                        Either::B(options) => {
+                            Ok(TsconfigDiscovery::Manual(TsconfigOptions::try_from(options)?))
+                        }
+                    }
+                })
+                .transpose()?,
             alias: op
                 .alias
                 .map(|alias| {
@@ -214,7 +285,6 @@ impl ResolverFactory {
                 .map(|o| o.into_iter().map(|x| StrOrStrList(x).into()).collect::<Vec<_>>())
                 .unwrap_or(default.alias_fields),
             condition_names: op.condition_names.unwrap_or(default.condition_names),
-            description_files: op.description_files.unwrap_or(default.description_files),
             enforce_extension: op
                 .enforce_extension
                 .map(|enforce_extension| enforce_extension.into())
@@ -265,15 +335,17 @@ impl ResolverFactory {
                 .map(|restrictions| {
                     restrictions
                         .into_iter()
-                        .map(|restriction| restriction.into())
-                        .collect::<Vec<_>>()
+                        .map(|restriction| restriction.try_into())
+                        .collect::<napi::Result<Vec<_>>>()
                 })
+                .transpose()?
                 .unwrap_or(default.restrictions),
             roots: op
                 .roots
                 .map(|roots| roots.into_iter().map(PathBuf::from).collect::<Vec<_>>())
                 .unwrap_or(default.roots),
             symlinks: op.symlinks.unwrap_or(default.symlinks),
+            node_path: op.node_path.unwrap_or(default.node_path),
             builtin_modules: op.builtin_modules.unwrap_or(default.builtin_modules),
             module_type: op.module_type.unwrap_or(default.module_type),
             allow_package_exports_in_directory_resolve: op
@@ -281,6 +353,48 @@ impl ResolverFactory {
                 .unwrap_or(default.allow_package_exports_in_directory_resolve),
             #[cfg(feature = "yarn_pnp")]
             yarn_pnp: default.yarn_pnp,
+        })
+    }
+}
+
+fn map_resolution_to_result(result: Result<Resolution, ResolveError>) -> ResolveResult {
+    match result {
+        Ok(resolution) => ResolveResult {
+            path: Some(resolution.full_path().to_string_lossy().to_string()),
+            error: None,
+            builtin: None,
+            module_type: resolution.module_type().map(ModuleType::from),
+            package_json_path: resolution
+                .package_json()
+                .and_then(|p| p.path().to_str())
+                .map(|p| p.to_string()),
+        },
+        Err(err) => {
+            let error = err.to_string();
+            ResolveResult {
+                path: None,
+                builtin: match err {
+                    ResolveError::Builtin { resolved, is_runtime_module } => {
+                        Some(Builtin { resolved, is_runtime_module })
+                    }
+                    _ => None,
+                },
+                module_type: None,
+                error: Some(error),
+                package_json_path: None,
+            }
         }
     }
+}
+
+fn resolve(resolver: &Resolver, path: &Path, request: &str) -> ResolveResult {
+    map_resolution_to_result(resolver.resolve(path, request))
+}
+
+fn resolve_file(resolver: &Resolver, path: &Path, request: &str) -> ResolveResult {
+    map_resolution_to_result(resolver.resolve_file(path, request))
+}
+
+fn resolve_dts(resolver: &Resolver, file: &Path, request: &str) -> ResolveResult {
+    map_resolution_to_result(resolver.resolve_dts(file, request))
 }

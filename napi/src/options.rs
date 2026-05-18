@@ -1,5 +1,6 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
+use fancy_regex::Regex;
 use napi::Either;
 use napi_derive::napi;
 
@@ -11,10 +12,11 @@ use napi_derive::napi;
 #[derive(Debug, Clone)]
 #[napi(object)]
 pub struct NapiResolveOptions {
-    /// Path to TypeScript configuration file.
+    /// Discover tsconfig automatically or use the specified tsconfig.json path.
     ///
     /// Default `None`
-    pub tsconfig: Option<TsconfigOptions>,
+    #[napi(ts_type = "'auto' | TsconfigOptions")]
+    pub tsconfig: Option<Either<String, TsconfigOptions>>,
 
     /// Alias for [ResolveOptions::alias] and [ResolveOptions::fallback].
     ///
@@ -38,11 +40,6 @@ pub struct NapiResolveOptions {
     ///
     /// Default `[]`
     pub condition_names: Option<Vec<String>>,
-
-    /// The JSON files to use for descriptions. (There was once a `bower.json`.)
-    ///
-    /// Default `["package.json"]`
-    pub description_files: Option<Vec<String>>,
 
     /// If true, it will not allow extension-less files.
     /// So by default `require('./foo')` works if `./foo` has a `.js` extension,
@@ -145,6 +142,14 @@ pub struct NapiResolveOptions {
     /// Default `true`
     pub symlinks: Option<bool>,
 
+    /// Whether to read the `NODE_PATH` environment variable and append its entries to `modules`.
+    ///
+    /// `NODE_PATH` is a deprecated Node.js feature that is not part of ESM resolution.
+    /// Set this to `false` to disable the behavior.
+    ///
+    /// Default `true`
+    pub node_path: Option<bool>,
+
     /// Whether to parse [module.builtinModules](https://nodejs.org/api/module.html#modulebuiltinmodules) or not.
     /// For example, "zlib" will throw [crate::ResolveError::Builtin] when set to true.
     ///
@@ -213,22 +218,27 @@ pub struct TsconfigOptions {
     /// Support for Typescript Project References.
     ///
     /// * `'auto'`: use the `references` field from tsconfig of `config_file`.
-    /// * `string[]`: manually provided relative or absolute path.
-    #[napi(ts_type = "'auto' | string[]")]
-    pub references: Option<Either<String, Vec<String>>>,
+    #[napi(ts_type = "'auto'")]
+    pub references: Option<String>,
 }
 
-impl From<Restriction> for unrs_resolver::Restriction {
-    fn from(val: Restriction) -> Self {
+impl TryFrom<Restriction> for unrs_resolver::Restriction {
+    type Error = napi::Error;
+
+    fn try_from(val: Restriction) -> napi::Result<Self> {
         match (val.path, val.regex) {
-            (None, None) => {
-                panic!("Should specify path or regex")
+            (None, None) => Err(napi::Error::from_reason("Should specify path or regex")),
+            (None, Some(regex)) => {
+                let re = Regex::new(&regex)
+                    .map_err(|e| napi::Error::from_reason(format!("Invalid regex: {e}")))?;
+                Ok(unrs_resolver::Restriction::Fn(Arc::new(move |path| {
+                    re.is_match(path.to_str().unwrap_or_default()).unwrap_or(false)
+                })))
             }
-            (None, Some(regex)) => unrs_resolver::Restriction::RegExp(regex),
-            (Some(path), None) => unrs_resolver::Restriction::Path(PathBuf::from(path)),
-            (Some(_), Some(_)) => {
-                panic!("Restriction can't be path and regex at the same time")
-            }
+            (Some(path), None) => Ok(unrs_resolver::Restriction::Path(PathBuf::from(path))),
+            (Some(_), Some(_)) => Err(napi::Error::from_reason(
+                "Restriction can't be path and regex at the same time",
+            )),
         }
     }
 }
@@ -243,23 +253,24 @@ impl From<EnforceExtension> for unrs_resolver::EnforceExtension {
     }
 }
 
-impl From<TsconfigOptions> for unrs_resolver::TsconfigOptions {
-    fn from(val: TsconfigOptions) -> Self {
-        unrs_resolver::TsconfigOptions {
+impl TryFrom<TsconfigOptions> for unrs_resolver::TsconfigOptions {
+    type Error = napi::Error;
+
+    fn try_from(val: TsconfigOptions) -> napi::Result<Self> {
+        Ok(unrs_resolver::TsconfigOptions {
             config_file: PathBuf::from(val.config_file),
             references: match val.references {
-                Some(Either::A(string)) if string.as_str() == "auto" => {
+                Some(string) if string.as_str() == "auto" => {
                     unrs_resolver::TsconfigReferences::Auto
                 }
-                Some(Either::A(opt)) => {
-                    panic!("`{}` is not a valid option for  tsconfig references", opt)
+                Some(opt) => {
+                    return Err(napi::Error::from_reason(format!(
+                        "`{opt}` is not a valid option for tsconfig references"
+                    )));
                 }
-                Some(Either::B(paths)) => unrs_resolver::TsconfigReferences::Paths(
-                    paths.into_iter().map(PathBuf::from).collect::<Vec<_>>(),
-                ),
                 None => unrs_resolver::TsconfigReferences::Disabled,
             },
-        }
+        })
     }
 }
 

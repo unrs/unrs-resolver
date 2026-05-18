@@ -56,14 +56,14 @@ fn pnp_basic() {
     assert_eq!(
         resolver.resolve(&fixture, "preact").map(|r| r.full_path()),
         Ok(fixture.join(
-            ".yarn/cache/preact-npm-10.26.9-90e1df1a58-15f187e327.zip/node_modules/preact/dist/preact.mjs"
+            ".yarn/cache/preact-npm-10.28.2-a02cd8b867-eb60bf526e.zip/node_modules/preact/dist/preact.mjs"
         )),
     );
 
     assert_eq!(
         resolver.resolve(&fixture, "preact/devtools").map(|r| r.full_path()),
         Ok(fixture.join(
-            ".yarn/cache/preact-npm-10.26.9-90e1df1a58-15f187e327.zip/node_modules/preact/devtools/dist/devtools.mjs"
+            ".yarn/cache/preact-npm-10.28.2-a02cd8b867-eb60bf526e.zip/node_modules/preact/devtools/dist/devtools.mjs"
         )),
     );
 
@@ -172,19 +172,17 @@ fn resolve_npm_protocol_alias() {
     );
 }
 
-// Windows is blocked by upstream
-// see also https://github.com/yarnpkg/pnp-rs/pull/10
-#[cfg(not(windows))]
 #[test]
+#[cfg(target_endian = "little")]
 fn resolve_global_cache() {
     let home_dir = dirs::home_dir().unwrap();
 
     #[cfg(windows)]
-    let global_cache = home_dir.join("AppData\\Local\\Yarn\\Berry");
+    let global_cache = home_dir.join("AppData\\Local\\Yarn\\Berry\\cache");
     #[cfg(not(windows))]
     let global_cache = home_dir.join(".yarn/berry/cache");
 
-    let fixture = super::fixture_root().join("global-pnp");
+    let fixture = super::fixture_root().join("pnp/global-pnp");
     let resolver = Resolver::new(ResolveOptions {
         cwd: Some(fixture),
         yarn_pnp: true,
@@ -207,5 +205,150 @@ fn resolve_global_cache() {
             .join("node_modules")
             .join("source-map")
             .join("source-map.js")),
+    );
+}
+
+#[test]
+fn test_resolve_tsconfig_extends_with_pnp() {
+    let fixture = super::fixture_root().join("pnp");
+    let resolver = Resolver::new(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        ..ResolveOptions::default()
+    });
+
+    let resolution = resolver.resolve_tsconfig(&fixture).expect("resolved");
+    let compiler_options = &resolution.compiler_options;
+    assert_eq!(compiler_options.target, Some("esnext".to_string()));
+}
+
+#[test]
+fn test_non_pnp_enabled_base() {
+    let fixture = super::fixture_root().join("pnp");
+
+    let base_resolver = Resolver::new(ResolveOptions::default());
+
+    let resolver = base_resolver.clone_with_options(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        extensions: vec![".js".into()],
+        condition_names: vec!["import".into()],
+        ..ResolveOptions::default()
+    });
+
+    assert_eq!(
+        resolver.resolve(&fixture, "is-even").map(|r| r.full_path()),
+        Ok(fixture.join(
+            ".yarn/cache/is-even-npm-1.0.0-9f726520dc-2728cc2f39.zip/node_modules/is-even/index.js"
+        ))
+    );
+}
+
+#[test]
+fn test_cache_preserved_when_not_toggling_yarn_pnp() {
+    let fixture = super::fixture_root().join("pnp");
+
+    // Start with a PnP-enabled resolver
+    let base_resolver = Resolver::new(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        extensions: vec![".js".into()],
+        condition_names: vec!["import".into()],
+        ..ResolveOptions::default()
+    });
+
+    // Clone with different options but keeping yarn_pnp: true
+    // With the bug from 9ae9056, this would create a new cache unnecessarily
+    let cloned_resolver = base_resolver.clone_with_options(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        extensions: vec![".js".into(), ".json".into()], // Different extensions
+        condition_names: vec!["import".into()],
+        ..ResolveOptions::default()
+    });
+
+    // The cache should be shared (same Arc pointer)
+    // This assertion would FAIL with the buggy code from 9ae9056
+    assert!(
+        base_resolver.shares_cache_with(&cloned_resolver),
+        "Cache should be preserved when yarn_pnp is not toggled"
+    );
+
+    // Verify both resolvers still work correctly
+    assert_eq!(
+        cloned_resolver.resolve(&fixture, "is-even").map(|r| r.full_path()),
+        Ok(fixture.join(
+            ".yarn/cache/is-even-npm-1.0.0-9f726520dc-2728cc2f39.zip/node_modules/is-even/index.js"
+        ))
+    );
+}
+
+#[test]
+fn test_cache_recreated_when_toggling_yarn_pnp_on() {
+    let fixture = super::fixture_root().join("pnp");
+
+    // Start with a non-PnP resolver
+    let base_resolver = Resolver::new(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: false,
+        extensions: vec![".js".into()],
+        ..ResolveOptions::default()
+    });
+
+    // Clone with yarn_pnp: true (toggle on)
+    let cloned_resolver = base_resolver.clone_with_options(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        extensions: vec![".js".into()],
+        condition_names: vec!["import".into()],
+        ..ResolveOptions::default()
+    });
+
+    // The cache should NOT be shared (different Arc)
+    assert!(
+        !base_resolver.shares_cache_with(&cloned_resolver),
+        "Cache should be recreated when toggling yarn_pnp on"
+    );
+
+    // And the new resolver should work with PnP
+    assert_eq!(
+        cloned_resolver.resolve(&fixture, "is-even").map(|r| r.full_path()),
+        Ok(fixture.join(
+            ".yarn/cache/is-even-npm-1.0.0-9f726520dc-2728cc2f39.zip/node_modules/is-even/index.js"
+        ))
+    );
+}
+
+#[test]
+fn test_cache_recreated_when_toggling_yarn_pnp_off() {
+    let fixture = super::fixture_root().join("pnp");
+
+    // Start with a PnP-enabled resolver
+    let base_resolver = Resolver::new(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: true,
+        extensions: vec![".js".into()],
+        condition_names: vec!["import".into()],
+        ..ResolveOptions::default()
+    });
+
+    // Clone with yarn_pnp: false (toggle off)
+    let cloned_resolver = base_resolver.clone_with_options(ResolveOptions {
+        cwd: Some(fixture.clone()),
+        yarn_pnp: false,
+        extensions: vec![".js".into()],
+        ..ResolveOptions::default()
+    });
+
+    // The cache should NOT be shared (different Arc)
+    assert!(
+        !base_resolver.shares_cache_with(&cloned_resolver),
+        "Cache should be recreated when toggling yarn_pnp off"
+    );
+
+    // Verify the cloned resolver works without PnP
+    assert_eq!(
+        cloned_resolver.resolve(&fixture, "is-even").map(|r| r.full_path()),
+        Err(crate::ResolveError::NotFound("is-even".to_string()))
     );
 }

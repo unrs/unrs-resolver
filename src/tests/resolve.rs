@@ -1,7 +1,5 @@
 //! <https://github.com/webpack/enhanced-resolve/blob/main/test/resolve.test.js>
 
-use url::Url;
-
 use crate::{Resolution, ResolveError, ResolveOptions, Resolver};
 
 #[test]
@@ -11,13 +9,15 @@ fn resolve() {
     let resolver = Resolver::default();
 
     let main1_js_path = f.join("main1.js").to_string_lossy().to_string();
-
-    let file_protocol_path = Url::from_file_path(main1_js_path.clone()).unwrap();
+    let m2 = f.join("node_modules").join("m2");
+    let m2_specifier = m2.to_string_lossy().to_string();
+    let m2_trailing_slash = m2_specifier.clone() + "/";
 
     #[rustfmt::skip]
     let pass = [
         ("absolute path", f.clone(), main1_js_path.as_str(), f.join("main1.js")),
-        ("file protocol absolute path", f.clone(), file_protocol_path.as_str(), f.join("main1.js")),
+        ("absolute path to package", f.clone(), m2_specifier.as_str(), m2.join("b.js")),
+        ("absolute path to package with trailing slash", f.clone(), m2_trailing_slash.as_str(), m2.join("b.js")),
         ("file with .js", f.clone(), "./main1.js", f.join("main1.js")),
         ("file without extension", f.clone(), "./main1", f.join("main1.js")),
         ("another file with .js", f.clone(), "./a.js", f.join("a.js")),
@@ -26,8 +26,8 @@ fn resolve() {
         ("file in module without extension", f.clone(), "m1/a", f.join("node_modules/m1/a.js")),
         ("another file in module without extension", f.clone(), "complexm/step1", f.join("node_modules/complexm/step1.js")),
         ("from submodule to file in sibling module", f.join("node_modules/complexm"), "m2/b.js", f.join("node_modules/m2/b.js")),
-        ("from nested directory to overwritten file in module", f.join("multiple_modules"), "m1/a.js", f.join("multiple_modules/node_modules/m1/a.js")),
-        ("from nested directory to not overwritten file in module", f.join("multiple_modules"), "m1/b.js", f.join("node_modules/m1/b.js")),
+        ("from nested directory to overwritten file in module", f.join("multiple-modules"), "m1/a.js", f.join("multiple-modules/node_modules/m1/a.js")),
+        ("from nested directory to not overwritten file in module", f.join("multiple-modules"), "m1/b.js", f.join("node_modules/m1/b.js")),
         ("file with query", f.clone(), "./main1.js?query", f.join("main1.js?query")),
         ("file with fragment", f.clone(), "./main1.js#fragment", f.join("main1.js#fragment")),
         ("file with fragment and query", f.clone(), "./main1.js#fragment?query", f.join("main1.js#fragment?query")),
@@ -54,7 +54,11 @@ fn resolve() {
         ("handle fragment edge case (no fragment)", f.clone(), "./no#fragment/#/#", f.join("no#fragment/#/#.js")),
         ("handle fragment edge case (fragment)", f.clone(), "./no#fragment/#/", f.join("no.js#fragment/#/")),
         ("handle fragment escaping", f.clone(), "./no\0#fragment/\0#/\0##fragment", f.join("no#fragment/#/#.js#fragment")),
-
+        // Test `node_modules/X/foo/` and `node_modules/X/foo.js` precedence.
+        ("file and dir precedence 1", f.clone(), "dir-and-file/foo", f.join("node_modules/dir-and-file/foo.js")),
+        ("file and dir precedence 2", f.clone(), "@scope/dir-and-file/foo", f.join("node_modules/@scope/dir-and-file/foo.js")),
+        ("file and dir precedence 1", f.clone(), "dir-and-file/foo/", f.join("node_modules/dir-and-file/foo/index.js")),
+        ("file and dir precedence 2", f.clone(), "@scope/dir-and-file/foo/", f.join("node_modules/@scope/dir-and-file/foo/index.js")),
     ];
 
     for (comment, path, request, expected) in pass {
@@ -67,13 +71,6 @@ fn resolve() {
         }
         assert_eq!(resolved_path, Some(expected), "{comment} {path:?} {request}");
     }
-
-    #[cfg(windows)]
-    let resolve_error = ResolveError::NotFound("\\\\.\\main.js".into());
-    #[cfg(not(windows))]
-    let resolve_error = ResolveError::PathNotSupported("file://./main.js".into());
-
-    assert_eq!(resolver.resolve(f, "file://./main.js"), Err(resolve_error));
 }
 
 #[test]
@@ -109,6 +106,25 @@ fn prefer_relative() {
 }
 
 #[test]
+fn prefer_relative_local_over_node_modules() {
+    // When both ./main1.js and node_modules/main1 exist, prefer_relative picks local file
+    let f = super::fixture().join("prefer-relative");
+    let resolver =
+        Resolver::new(ResolveOptions { prefer_relative: true, ..ResolveOptions::default() });
+    let resolved_path = resolver.resolve(&f, "main1.js").map(|r| r.full_path());
+    assert_eq!(resolved_path, Ok(f.join("main1.js")));
+}
+
+#[test]
+fn no_prefer_relative_uses_node_modules() {
+    // Without prefer_relative, bare specifier goes to node_modules
+    let f = super::fixture().join("prefer-relative");
+    let resolver = Resolver::default();
+    let resolved_path = resolver.resolve(&f, "main1").map(|r| r.full_path());
+    assert_eq!(resolved_path, Ok(f.join("node_modules/main1/index.js")));
+}
+
+#[test]
 fn resolve_to_context() {
     let f = super::fixture();
     let resolver =
@@ -137,13 +153,13 @@ fn resolve_hash_as_module() {
 }
 
 #[test]
-fn prefer_file_over_dir() {
-    let f = super::fixture_root().join("prefer-file-over-dir");
+fn resolve_edge_cases() {
+    let f = super::fixture();
     let resolver = Resolver::default();
-    let data = [
-        ("one level package name", f.clone(), "bar", f.join("node_modules/bar.js")),
-        ("scoped level package name", f.clone(), "@foo/bar", f.join("node_modules/@foo/bar.js")),
-    ];
+
+    // Test various edge cases for path resolution
+    let data = [("resolve with multiple dots", f.clone(), "./a/../main1.js", f.join("main1.js"))];
+
     for (comment, path, request, expected) in data {
         let resolved_path = resolver.resolve(&path, request).map(|r| r.full_path());
         assert_eq!(resolved_path, Ok(expected), "{comment} {path:?} {request}");
@@ -151,8 +167,27 @@ fn prefer_file_over_dir() {
 }
 
 #[test]
+fn resolve_file_rejects_parentless_path() {
+    let resolver = Resolver::default();
+    let root = std::env::current_dir()
+        .expect("get current dir")
+        .ancestors()
+        .last()
+        .expect("get root ancestor")
+        .to_path_buf();
+
+    let error =
+        resolver.resolve_file(&root, "./main1.js").expect_err("expected invalid input error");
+    let ResolveError::IOError(io_error) = error else {
+        panic!("expected IOError, got {error:?}");
+    };
+    let io_error: std::io::Error = io_error.into();
+    assert_eq!(io_error.kind(), std::io::ErrorKind::InvalidInput);
+}
+
+#[test]
 fn resolve_dot() {
-    let f = super::fixture_root().join("dot");
+    let f = super::fixture_root().join("integration/dot");
     let foo_dir: std::path::PathBuf = f.join("foo");
     let resolver = Resolver::default();
     let foo_index = foo_dir.join("index.js");
@@ -178,24 +213,8 @@ fn resolve_dot() {
 }
 
 #[test]
-fn symlink_with_nested_node_modules() {
-    let f = super::fixture_root().join("symlink-with-nested-node_modules");
-
-    let resolver = Resolver::default();
-    let resolved_path =
-        resolver.resolve(f.join("bar/node_modules/foo"), "dep").map(|r| r.full_path());
-    assert_eq!(resolved_path, Ok(f.join("foo/node_modules/dep/index.js")));
-
-    let resolver = Resolver::new(ResolveOptions { symlinks: false, ..ResolveOptions::default() });
-    assert_eq!(
-        resolver.resolve(f.join("bar/node_modules/foo"), "dep"),
-        Err(ResolveError::NotFound("dep".into()))
-    );
-}
-
-#[test]
 fn abnormal_relative() {
-    let f = super::fixture_root().join("abnormal-relative-with-node_modules");
+    let f = super::fixture_root().join("integration/abnormal-relative-with-node_modules");
 
     let base = f.join("foo/bar/baz");
 
@@ -229,7 +248,7 @@ fn abnormal_relative() {
         );
     }
 
-    let f = super::fixture_root().join("abnormal-relative-without-node_modules");
+    let f = super::fixture_root().join("integration/abnormal-relative-without-node_modules");
 
     let base = f.join("foo/bar/baz");
 
@@ -253,7 +272,7 @@ fn abnormal_relative() {
 #[cfg(windows)]
 #[test]
 fn resolve_normalized_on_windows() {
-    use normalize_path::NormalizePath;
+    use crate::PathUtil;
 
     let f = super::fixture();
     let absolute = f.join("./foo/index.js").normalize();
@@ -273,4 +292,24 @@ fn resolve_normalized_on_windows() {
         resolution.map(|r| r.to_string_lossy().into_owned()),
         Ok(absolute_str.clone().into_owned())
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn file_protocol() {
+    let f = super::fixture();
+
+    let main1_js_path = f.join("main1.js").to_string_lossy().to_string();
+    // Construct file:/// URL manually: forward-slash the path and prepend file:///
+    let file_protocol_path = format!("file:///{}", main1_js_path.replace('\\', "/"));
+
+    let resolver = Resolver::default();
+
+    let resolution = resolver.resolve(&f, &file_protocol_path).ok();
+    let resolved_path = resolution.as_ref().map(Resolution::full_path);
+    assert_eq!(resolved_path, Some(f.join("main1.js")));
+
+    let resolve_error = ResolveError::NotFound("\\\\.\\main.js".into());
+
+    assert_eq!(resolver.resolve(f, "file://./main.js"), Err(resolve_error));
 }

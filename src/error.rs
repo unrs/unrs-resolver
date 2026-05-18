@@ -50,7 +50,7 @@ pub enum ResolveError {
     #[error("{0}")]
     IOError(IOError),
 
-    /// Indicates the resulting path won't be able consumable by NodeJS `import` or `require`.
+    /// Indicates the resulting path won't be consumable by NodeJS `import` or `require`.
     /// For example, DOS device path with Volume GUID (`\\?\Volume{...}`) is not supported.
     #[error("Path {0:?} contains unsupported construct.")]
     PathNotSupported(PathBuf),
@@ -82,18 +82,19 @@ pub enum ResolveError {
     #[error("{0:?}")]
     Json(JSONError),
 
-    /// Restricted by `ResolveOptions::restrictions`
-    #[error(r#"Path "{0}" restricted by {0}"#)]
-    Restriction(PathBuf, PathBuf),
-
     #[error(r#"Invalid module "{0}" specifier is not a valid subpath for the "exports" resolution of {1}"#)]
     InvalidModuleSpecifier(String, PathBuf),
 
     #[error(r#"Invalid "exports" target "{0}" defined for '{1}' in the package config {2}"#)]
     InvalidPackageTarget(String, String, PathBuf),
 
-    #[error(r#"Package subpath '{0}' is not defined by "exports" in {1}"#)]
-    PackagePathNotExported(String, PathBuf),
+    #[error(r#""{subpath}" is not exported under {conditions} from package {package_path} (see exports field in {package_json_path})"#)]
+    PackagePathNotExported {
+        subpath: String,
+        package_path: PathBuf,
+        package_json_path: PathBuf,
+        conditions: ConditionNames,
+    },
 
     #[error(r#"Invalid package config "{0}", "exports" cannot contain some keys starting with '.' and some not. The exports object must either be an object of package subpath keys or an object of main entry condition name keys only."#)]
     InvalidPackageConfig(PathBuf),
@@ -129,6 +130,7 @@ impl ResolveError {
         matches!(self, Self::Ignored(_))
     }
 
+    #[cold]
     #[must_use]
     pub fn from_serde_json_error(path: PathBuf, error: &serde_json::Error) -> Self {
         Self::Json(JSONError {
@@ -148,7 +150,8 @@ pub enum SpecifierError {
 }
 
 /// JSON error from [serde_json::Error]
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Error)]
+#[error("{message}")]
 pub struct JSONError {
     pub path: PathBuf,
     pub message: String,
@@ -167,6 +170,7 @@ impl PartialEq for IOError {
 }
 
 impl From<IOError> for io::Error {
+    #[cold]
     fn from(error: IOError) -> Self {
         let io_error = error.0.as_ref();
         Self::new(io_error.kind(), io_error.to_string())
@@ -174,6 +178,7 @@ impl From<IOError> for io::Error {
 }
 
 impl From<io::Error> for ResolveError {
+    #[cold]
     fn from(err: io::Error) -> Self {
         Self::IOError(IOError(Arc::new(err)))
     }
@@ -181,6 +186,13 @@ impl From<io::Error> for ResolveError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CircularPathBufs(Vec<PathBuf>);
+
+impl CircularPathBufs {
+    #[must_use]
+    pub fn paths(&self) -> &[PathBuf] {
+        &self.0
+    }
+}
 
 impl Display for CircularPathBufs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -195,8 +207,41 @@ impl Display for CircularPathBufs {
 }
 
 impl From<Vec<PathBuf>> for CircularPathBufs {
+    #[cold]
     fn from(value: Vec<PathBuf>) -> Self {
         Self(value)
+    }
+}
+
+/// Helper type for formatting condition names in error messages
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConditionNames(Vec<String>);
+
+impl ConditionNames {
+    #[must_use]
+    pub fn names(&self) -> &[String] {
+        &self.0
+    }
+}
+
+impl From<Vec<String>> for ConditionNames {
+    fn from(conditions: Vec<String>) -> Self {
+        Self(conditions)
+    }
+}
+
+impl Display for ConditionNames {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.0.len() {
+            0 => write!(f, "no conditions"),
+            1 => write!(f, "the condition \"{}\"", self.0[0]),
+            _ => {
+                write!(f, "the conditions ")?;
+                let conditions_str =
+                    self.0.iter().map(|s| format!("\"{s}\"")).collect::<Vec<_>>().join(", ");
+                write!(f, "[{conditions_str}]")
+            }
+        }
     }
 }
 
@@ -234,4 +279,21 @@ fn test_coverage() {
     let error = ResolveError::Specifier(SpecifierError::Empty("x".into()));
     assert_eq!(format!("{error:?}"), r#"Specifier(Empty("x"))"#);
     assert_eq!(error.clone(), error);
+}
+
+#[test]
+fn test_circular_path_bufs_display() {
+    use std::path::PathBuf;
+
+    let paths = vec![
+        PathBuf::from("/foo/tsconfig.json"),
+        PathBuf::from("/bar/tsconfig.json"),
+        PathBuf::from("/baz/tsconfig.json"),
+    ];
+    let circular = CircularPathBufs::from(paths);
+    let display_str = format!("{circular}");
+    assert!(display_str.contains("/foo/tsconfig.json"));
+    assert!(display_str.contains(" -> "));
+    assert!(display_str.contains("/bar/tsconfig.json"));
+    assert!(display_str.contains("/baz/tsconfig.json"));
 }

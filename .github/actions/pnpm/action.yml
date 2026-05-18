@@ -1,46 +1,33 @@
-name: Pnpm
+name: Setup Node and pnpm
 
-description: Install pnpm
+description: Setup Node.js and pnpm with caching, and install yarn fixtures
 
 inputs:
   architecture:
-    description: The architecture to use
     required: false
+    description: "Optional architecture for Node.js (e.g., x64, arm64). If not specified, defaults to the runner architecture."
+
   cpu:
-    description: The cpu architecture to use
     required: false
+    description: "Optional CPU architecture for pnpm supportedArchitectures configuration (e.g., x64, arm64)."
 
 runs:
   using: composite
   steps:
-    - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
-
-    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+    - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
       with:
-        node-version-file: .node-version
         architecture: ${{ inputs.architecture }}
-        cache: pnpm
+        cpu: ${{ inputs.cpu }}
 
-    - if: ${{ inputs.cpu }}
-      shell: bash
-      run: pnpm config set supportedArchitectures.cpu "${CPU_ARCH}"
-      env:
-        CPU_ARCH: ${{ inputs.cpu }}
-
-    - name: pnpm
+    - name: Install yarn fixtures
       shell: bash
       run: |
         corepack enable
-        pnpm install
-
-    - name: yarn pnp
-      shell: bash
-      run: |
         cd fixtures/pnp
         yarn install
 
-        cd ../global-pnp
+        cd global-pnp
         yarn install
 
-        cd ../yarn
+        cd ../../yarn
         yarn install

@@ -2,21 +2,24 @@
 
 use rustc_hash::FxHashSet;
 
-use crate::{JSONError, Resolution, ResolveContext, ResolveError, ResolveOptions, Resolver};
+use crate::{JSONError, ResolveContext, ResolveError, Resolver};
 
 // should not resolve main in incorrect description file #1
 #[test]
 fn incorrect_description_file_1() {
     let f = super::fixture().join("incorrect-package");
     let mut ctx = ResolveContext::default();
-    let resolution = Resolver::default().resolve_with_context(f.join("pack1"), ".", &mut ctx);
-    let error = ResolveError::Json(JSONError {
-        path: f.join("pack1/package.json"),
-        message: String::from("EOF while parsing a value at line 3 column 0"),
-        line: 3,
-        column: 0,
-    });
-    assert_eq!(resolution, Err(error));
+    let error =
+        Resolver::default().resolve_with_context(f.join("pack1"), ".", None, &mut ctx).unwrap_err();
+    match error {
+        ResolveError::Json(e) => {
+            assert_eq!(e.path, f.join("pack1/package.json"));
+            // Verify that we get proper error details from serde_json fallback
+            assert!(e.message.contains("EOF"));
+            assert!(e.line > 0);
+        }
+        _ => panic!("must be a json error."),
+    }
     assert_eq!(ctx.file_dependencies, FxHashSet::from_iter([f.join("pack1/package.json")]));
     assert!(ctx.missing_dependencies.is_empty());
 }
@@ -28,8 +31,8 @@ fn incorrect_description_file_2() {
     let resolution = Resolver::default().resolve(f.join("pack2"), ".");
     let error = ResolveError::Json(JSONError {
         path: f.join("pack2/package.json"),
-        message: String::from("EOF while parsing a value at line 1 column 0"),
-        line: 1,
+        message: String::from("File is empty"),
+        line: 0,
         column: 0,
     });
     assert_eq!(resolution, Err(error));
@@ -41,22 +44,4 @@ fn incorrect_description_file_3() {
     let f = super::fixture().join("incorrect-package");
     let resolution = Resolver::default().resolve(f.join("pack2"), ".");
     assert!(resolution.is_err());
-}
-
-// `enhanced_resolve` does not have this test case
-#[test]
-fn no_description_file() {
-    let f = super::fixture_root().join("enhanced_resolve");
-
-    // has description file
-    let resolver = Resolver::default();
-    assert_eq!(
-        resolver.resolve(&f, ".").map(Resolution::into_path_buf),
-        Ok(f.join("lib/index.js"))
-    );
-
-    // without description file
-    let resolver =
-        Resolver::new(ResolveOptions { description_files: vec![], ..ResolveOptions::default() });
-    assert_eq!(resolver.resolve(&f, "."), Err(ResolveError::NotFound(".".into())));
 }

@@ -1,0 +1,208 @@
+//! Test public APIs
+
+use std::{env, path::PathBuf};
+
+use unrs_resolver::{
+    AliasValue, EnforceExtension, Resolution, ResolveContext, ResolveError, ResolveOptions,
+    Resolver,
+};
+
+fn dir() -> PathBuf {
+    env::current_dir().unwrap()
+}
+
+fn fixture() -> PathBuf {
+    dir().join("fixtures/integration")
+}
+
+fn resolve(specifier: &str) -> Resolution {
+    let path = fixture();
+    Resolver::new(ResolveOptions::default()).resolve(path, specifier).unwrap()
+}
+
+#[test]
+fn clone() {
+    let resolution = resolve("./package.json");
+    assert_eq!(resolution.clone(), resolution);
+}
+
+#[test]
+fn debug() {
+    let resolution = resolve("./package.json");
+    let s = format!("{resolution:?}");
+    assert!(!s.is_empty());
+}
+
+#[test]
+fn eq() {
+    let resolution = resolve("./package.json");
+    assert_eq!(resolution, resolution);
+}
+
+#[test]
+fn package_json() {
+    let resolution = resolve("./package.json");
+    let package_json = resolution.package_json().unwrap();
+    assert_eq!(package_json.name().unwrap(), "name");
+    assert_eq!(package_json.r#type().unwrap().to_string(), "module".to_string());
+    assert_eq!(package_json.side_effects(), None);
+}
+
+#[test]
+fn tsconfig() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    let tsconfig = resolver.resolve_tsconfig("./fixtures/integration").unwrap();
+    assert!(tsconfig.root);
+    assert_eq!(tsconfig.path, PathBuf::from("./fixtures/integration/tsconfig.json"));
+}
+
+#[test]
+fn tsconfig_extends_self_reference() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    let err = resolver
+        .resolve_tsconfig("./fixtures/integration/tsconfig_self_reference.json")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ResolveError::TsconfigCircularExtend(
+            vec![
+                "./fixtures/integration/tsconfig_self_reference.json".into(),
+                "./fixtures/integration/tsconfig_self_reference.json".into()
+            ]
+            .into()
+        )
+    );
+}
+
+#[test]
+fn tsconfig_extends_circular_reference() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    let err = resolver
+        .resolve_tsconfig("./fixtures/integration/tsconfig_circular_reference_a.json")
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ResolveError::TsconfigCircularExtend(
+            vec![
+                "./fixtures/integration/tsconfig_circular_reference_a.json".into(),
+                "./fixtures/integration/tsconfig_circular_reference_b.json".into(),
+                "./fixtures/integration/tsconfig_circular_reference_a.json".into(),
+            ]
+            .into()
+        )
+    );
+}
+
+#[test]
+fn clear_cache() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    resolver.clear_cache(); // exists
+}
+
+#[test]
+fn options() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    let options = resolver.options();
+    assert!(!format!("{options:?}").is_empty());
+}
+
+#[test]
+fn debug_resolver() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    assert!(!format!("{resolver:?}").is_empty());
+}
+
+#[test]
+fn dependencies() {
+    let path = fixture();
+    let mut ctx = ResolveContext::default();
+    let _ = Resolver::new(ResolveOptions::default()).resolve_with_context(
+        path,
+        "./package.json",
+        None,
+        &mut ctx,
+    );
+    assert!(!ctx.file_dependencies.is_empty());
+    assert!(ctx.missing_dependencies.is_empty());
+}
+
+#[test]
+fn options_api() {
+    _ = ResolveOptions::default()
+        .with_builtin_modules(true)
+        .with_condition_names(&[])
+        .with_extension(".js")
+        .with_force_extension(EnforceExtension::Auto)
+        .with_fully_specified(true)
+        .with_main_field("asdf")
+        .with_main_file("main")
+        .with_module("module")
+        .with_prefer_absolute(true)
+        .with_prefer_relative(true)
+        .with_root(PathBuf::new())
+        .with_symbolic_link(true);
+}
+
+#[test]
+fn error_display_circular_path_bufs() {
+    let resolver = Resolver::new(ResolveOptions::default());
+    let err = resolver
+        .resolve_tsconfig("./fixtures/integration/tsconfig_circular_reference_a.json")
+        .unwrap_err();
+    let display = format!("{err}");
+    assert!(display.contains("circularly"), "{display}");
+    assert!(display.contains(" -> "), "should use arrow separator: {display}");
+
+    // Test the inner paths accessor
+    if let ResolveError::TsconfigCircularExtend(circular) = &err {
+        assert_eq!(circular.paths().len(), 3);
+    } else {
+        panic!("Expected TsconfigCircularExtend");
+    }
+}
+
+#[test]
+fn error_display_package_path_not_exported() {
+    let f = dir().join("fixtures/enhanced-resolve/test/fixtures/exports-field");
+    // Single condition name
+    let resolver = Resolver::new(ResolveOptions {
+        condition_names: vec!["webpack".into()],
+        fully_specified: true,
+        ..ResolveOptions::default()
+    });
+    let err = resolver.resolve(&f, "exports-field/anything/else").unwrap_err();
+    let display = format!("{err}");
+    assert!(display.contains("is not exported"), "{display}");
+    assert!(display.contains(r#""webpack""#), "should show condition name: {display}");
+
+    // Multiple conditions
+    let resolver2 = Resolver::new(ResolveOptions {
+        condition_names: vec!["webpack".into(), "node".into()],
+        fully_specified: true,
+        ..ResolveOptions::default()
+    });
+    let err2 = resolver2.resolve(&f, "exports-field/anything/else").unwrap_err();
+    let display2 = format!("{err2}");
+    assert!(display2.contains("conditions"), "should say 'conditions' for multiple: {display2}");
+}
+
+#[test]
+fn clone_with_options_recompiles_alias() {
+    let fixture = dir().join("fixtures/enhanced-resolve/test/fixtures");
+
+    let base_resolver = Resolver::new(ResolveOptions {
+        alias: vec![("alias-target".into(), vec![AliasValue::from("./a")])],
+        ..ResolveOptions::default()
+    });
+
+    let cloned_resolver = base_resolver.clone_with_options(ResolveOptions {
+        alias: vec![("alias-target".into(), vec![AliasValue::from("./b")])],
+        ..ResolveOptions::default()
+    });
+
+    let base = base_resolver.resolve(&fixture, "alias-target").unwrap().into_path_buf();
+    let cloned = cloned_resolver.resolve(&fixture, "alias-target").unwrap().into_path_buf();
+
+    assert_eq!(base, fixture.join("a.js"));
+    assert_eq!(cloned, fixture.join("b.js"));
+}

@@ -15,7 +15,7 @@ fn test_simple() {
 
     let resolver = Resolver::new(ResolveOptions {
         extensions: vec![".js".into()],
-        main_files: vec!["index.js".into()],
+        main_files: vec!["index".into()],
         condition_names: vec!["webpack".into()],
         ..ResolveOptions::default()
     });
@@ -30,6 +30,9 @@ fn test_simple() {
         ("should resolve package #3", f.clone(), "#ccc/index.js", f.join("node_modules/c/index.js")),
         ("should resolve package #4", f.clone(), "#c", f.join("node_modules/c/index.js")),
         ("should resolve with wildcard pattern", f2.clone(), "#internal/i.js", f2.join("src/internal/i.js")),
+        ("wildcard #/path", f2.clone(), "#/internal/i.js", f2.join("src/internal/i.js")),
+        ("wildcard #/* 1", f2.clone(), "#/features/f", f2.join("src/features/f.js")),
+        ("wildcard #/* 2", f2.clone(), "#/features/y/y.js", f2.join("src/features/y/y.js")),
     ];
 
     for (comment, path, request, expected) in pass {
@@ -45,6 +48,7 @@ fn test_simple() {
     let fail = [
         ("should disallow resolve out of package scope", f.clone(), "#b", ResolveError::InvalidPackageTarget("../b.js".to_string(), "#b".to_string(), f.join("package.json"))),
         ("should resolve package #2", f.clone(), "#a", ResolveError::PackageImportNotDefined("#a".to_string(), f.join("package.json"))),
+        ("# is not allowed", f.clone(), "#", ResolveError::InvalidModuleSpecifier("#".to_string(), f.join("package.json"))),
     ];
 
     for (comment, path, request, error) in fail {
@@ -88,7 +92,7 @@ fn shared_resolvers() {
 //   } else {
 //     console.log(`expect: Some(vec!${JSON.stringify(c.expect)}),`)
 //   }
-//  console.log(`imports_field: imports_field(json!(${JSON.stringify(c.suite[0], null, 2)})),`)
+//  console.log(`imports_field: imports_field(&json!(${JSON.stringify(c.suite[0], null, 2)})),`)
 //   console.log(`request: "${c.suite[1]}",`)
 //  console.log(`condition_names: vec!${JSON.stringify(c.suite[2])},`)
 //   console.log("},")
@@ -102,12 +106,26 @@ struct TestCase {
     condition_names: Vec<&'static str>,
 }
 
-fn imports_field(value: serde_json::Value) -> ImportsExportsMap<'static> {
+#[cfg(target_endian = "little")]
+fn imports_field(value: &serde_json::Value) -> ImportsExportsMap<'static> {
+    // Serialize back to JSON string and parse with simd_json for little-endian
+    let json_str = serde_json::to_string(value).unwrap();
+    let bytes = Box::leak::<'static>(Box::new(json_str.into_bytes()));
+    let borrowed = simd_json::to_borrowed_value(bytes).unwrap();
+    let simd_json::BorrowedValue::Object(map) = borrowed else {
+        panic!("Expected an object");
+    };
+    let map = Box::leak::<'static>(Box::new(map));
+    ImportsExportsMap(map)
+}
+
+#[cfg(target_endian = "big")]
+fn imports_field(value: &serde_json::Value) -> ImportsExportsMap<'static> {
+    // Clone and leak the value to get a 'static reference for big-endian
+    let value = Box::leak::<'static>(Box::new(value.clone()));
     let serde_json::Value::Object(map) = value else {
         panic!("Expected an object");
     };
-    // Don't do this at home:
-    let map = Box::leak::<'static>(Box::new(map));
     ImportsExportsMap(map)
 }
 
@@ -118,7 +136,7 @@ fn test_cases() {
         TestCase {
             name: "sample #1",
             expect: Some(vec!["./dist/test/file.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#abc/": {
                 "import": [
                   "./dist/",
@@ -135,7 +153,7 @@ fn test_cases() {
         TestCase {
             name: "sample #1",
             expect: Some(vec!["./src/test/file.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#abc/": {
                 "import": [
                   "./src/"
@@ -150,7 +168,7 @@ fn test_cases() {
         TestCase {
             name: "sample #2",
             expect: Some(vec!["./data/timezones/pdt.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#1/timezones/": "./data/timezones/"
             })),
             request: "#1/timezones/pdt.mjs",
@@ -159,7 +177,7 @@ fn test_cases() {
         TestCase {
             name: "sample #3",
             expect: Some(vec!["./data/timezones/timezones/pdt.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#aaa/": "./data/timezones/",
               "#a/": "./data/timezones/"
             })),
@@ -169,7 +187,7 @@ fn test_cases() {
         TestCase {
             name: "sample #4",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/lib/": {
                 "browser": [
                   "./browser/"
@@ -185,7 +203,7 @@ fn test_cases() {
         TestCase {
             name: "sample #5",
             expect: Some(vec!["./browser/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/lib/": {
                 "browser": [
                   "./browser/"
@@ -202,7 +220,7 @@ fn test_cases() {
         TestCase {
             name: "sample #6",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/dist/a": "./dist/index.js"
             })),
             request: "#a/dist/aaa",
@@ -211,7 +229,7 @@ fn test_cases() {
         TestCase {
             name: "sample #7",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/a/a/": "./dist/index.js"
             })),
             request: "#a/a/a",
@@ -220,7 +238,7 @@ fn test_cases() {
         TestCase {
             name: "sample #8",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": "./index.js"
             })),
             request: "#a/timezones/pdt.mjs",
@@ -229,7 +247,7 @@ fn test_cases() {
         TestCase {
             name: "sample #9",
             expect: Some(vec!["./main.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index.js": "./main.js"
             })),
             request: "#a/index.js",
@@ -238,7 +256,7 @@ fn test_cases() {
         TestCase {
             name: "sample #10",
             expect: Some(vec!["./ok.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -252,7 +270,7 @@ fn test_cases() {
         TestCase {
             name: "sample #11",
             expect: Some(vec!["./ok.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -266,7 +284,7 @@ fn test_cases() {
         TestCase {
             name: "sample #12",
             expect: Some(vec!["./ok.js#abc"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -280,7 +298,7 @@ fn test_cases() {
         TestCase {
             name: "sample #13",
             expect: Some(vec!["./ok.js?abc"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -294,7 +312,7 @@ fn test_cases() {
         TestCase {
             name: "sample #14",
             expect: Some(vec!["./🎉.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -308,7 +326,7 @@ fn test_cases() {
         TestCase {
             name: "sample #15",
             expect: Some(vec!["./%F0%9F%8E%89.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -322,7 +340,7 @@ fn test_cases() {
         TestCase {
             name: "sample #16",
             expect: Some(vec!["./ok.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -336,7 +354,7 @@ fn test_cases() {
         TestCase {
             name: "sample #17",
             expect: Some(vec!["./other.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -350,7 +368,7 @@ fn test_cases() {
         TestCase {
             name: "sample #18",
             expect: Some(vec!["./ok.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -364,7 +382,7 @@ fn test_cases() {
         TestCase {
             name: "sample #19",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -378,7 +396,7 @@ fn test_cases() {
         TestCase {
             name: "sample #20",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/#foo": "./ok.js",
               "#a/module": "./ok.js",
               "#a/🎉": "./ok.js",
@@ -392,7 +410,7 @@ fn test_cases() {
         TestCase {
             name: "sample #21",
             expect: Some(vec!["./d?e?f"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/a?b?c/": "./"
             })),
             request: "#a/a?b?c/d?e?f",
@@ -403,7 +421,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             expect: None,
             // expect: Some(vec!["/user/a/index"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "/user/a/"
             })),
             request: "#a/index",
@@ -412,7 +430,7 @@ fn test_cases() {
         TestCase {
             name: "path tree edge case #1",
             expect: Some(vec!["./A/b/d.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./A/",
               "#a/b/c": "./c.js"
             })),
@@ -422,7 +440,7 @@ fn test_cases() {
         TestCase {
             name: "path tree edge case #2",
             expect: Some(vec!["./A/c.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./A/",
               "#a/b": "./b.js"
             })),
@@ -432,7 +450,7 @@ fn test_cases() {
         TestCase {
             name: "path tree edge case #3",
             expect: Some(vec!["./A/b/c/d.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./A/",
               "#a/b/c/d": "./c.js"
             })),
@@ -442,7 +460,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #1",
             expect: Some(vec!["./dist/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": "./dist/index.js"
             })),
             request: "#a",
@@ -451,7 +469,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #2",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./"
             })),
             request: "#a",
@@ -460,7 +478,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #3",
             expect: Some(vec!["./dist/a.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./dist/",
               "#a/index.js": "./dist/a.js"
             })),
@@ -470,7 +488,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #4",
             expect: Some(vec!["./index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": [
                   "./browser/"
@@ -486,7 +504,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #5",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": [
                   "./browser/"
@@ -502,7 +520,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #6",
             expect: Some(vec!["./index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": {
                 "browser": "./index.js",
                 "node": "./src/node/index.js",
@@ -515,7 +533,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #7",
             expect: Some(vec!["./src/index.js"]), // `enhanced_resolve` is `None`
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": {
                 "default": "./src/index.js",
                 "browser": "./index.js",
@@ -528,7 +546,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #8",
             expect: Some(vec!["./src/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": {
                 "browser": "./index.js",
                 "node": "./src/node/index.js",
@@ -541,7 +559,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #9",
             expect: Some(vec!["./index"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": "./index"
             })),
             request: "#a",
@@ -550,7 +568,7 @@ fn test_cases() {
         TestCase {
             name: "Direct mapping #10",
             expect: Some(vec!["./index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index": "./index.js"
             })),
             request: "#a/index",
@@ -561,7 +579,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["b"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": "b"
             })),
             request: "#a",
@@ -572,7 +590,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["b/index"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "b/"
             })),
             request: "#a/index",
@@ -583,7 +601,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["b#anotherhashishere"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a?q=a#hashishere": "b#anotherhashishere"
             })),
             request: "#a?q=a#hashishere",
@@ -592,7 +610,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #1",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -611,7 +629,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #2",
             expect: Some(vec!["./import.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -630,7 +648,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #3",
             expect: Some(vec!["./require.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -650,7 +668,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #3",
             expect: Some(vec!["./import.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -666,7 +684,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #4",
             expect: Some(vec!["./require.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -691,7 +709,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #4",
             expect: Some(vec!["./import.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -711,7 +729,7 @@ fn test_cases() {
         TestCase {
             name: "Direct and conditional mapping #4",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": [
                 {
                   "browser": "./browser.js"
@@ -729,7 +747,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #1",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#timezones": "./data/timezones/"
             })),
             request: "#timezones/pdt.mjs",
@@ -738,7 +756,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #2",
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#timezones/": "./data/timezones"
             })),
             request: "#timezones/pdt.mjs",
@@ -747,7 +765,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #3",
             expect: Some(vec!["./data/timezones/pdt/index.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#timezones/pdt/": "./data/timezones/pdt/"
             })),
             request: "#timezones/pdt/index.mjs",
@@ -756,7 +774,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #4",
             expect: Some(vec!["./timezones/pdt.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./timezones/"
             })),
             request: "#a/pdt.mjs",
@@ -765,7 +783,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #5",
             expect: Some(vec!["./timezones/pdt.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./"
             })),
             request: "#a/timezones/pdt.mjs",
@@ -774,7 +792,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #6",
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "."
             })),
             request: "#a/timezones/pdt.mjs",
@@ -783,7 +801,7 @@ fn test_cases() {
         TestCase {
             name: "mapping to a folder root #7",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": "./"
             })),
             request: "#a/timezones/pdt.mjs",
@@ -792,7 +810,7 @@ fn test_cases() {
         TestCase {
             name: "the longest matching path prefix is prioritized #1",
             expect: Some(vec!["./lib/index.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./",
               "#a/dist/": "./lib/"
             })),
@@ -802,7 +820,7 @@ fn test_cases() {
         TestCase {
             name: "the longest matching path prefix is prioritized #2",
             expect: Some(vec!["./dist/utils/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/dist/utils/": "./dist/utils/",
               "#a/dist/": "./lib/"
             })),
@@ -812,7 +830,7 @@ fn test_cases() {
         TestCase {
             name: "the longest matching path prefix is prioritized #3",
             expect: Some(vec!["./dist/utils/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/dist/utils/index.js": "./dist/utils/index.js",
               "#a/dist/utils/": "./dist/utils/index.mjs",
               "#a/dist/": "./lib/"
@@ -823,7 +841,7 @@ fn test_cases() {
         TestCase {
             name: "the longest matching path prefix is prioritized #4",
             expect: Some(vec!["./lib/index.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./browser/"
               },
@@ -837,7 +855,7 @@ fn test_cases() {
             // This behaves differently from enhanced_resolve, because `lodash/` is an an InvalidPackageConfig
             // expect: Some(vec!["lodash/index.js"]),
             expect: Some(vec!["./utils/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": [
                   "lodash/",
@@ -855,7 +873,7 @@ fn test_cases() {
         TestCase {
             name: "conditional mapping folder #1",
             expect: Some(vec!["./utils/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": [
                   "./utils/"
@@ -871,7 +889,7 @@ fn test_cases() {
         TestCase {
             name: "conditional mapping folder #2",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "webpack": "./wpk/",
                 "browser": [
@@ -889,7 +907,7 @@ fn test_cases() {
         TestCase {
             name: "conditional mapping folder #3",
             expect: Some(vec!["./wpk/index.mjs"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "webpack": "./wpk/",
                 "browser": [
@@ -909,7 +927,7 @@ fn test_cases() {
             // We throw `PackageImportNotDefined`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "/utils/": "./a/"
             })),
             request: "#a/index.mjs",
@@ -920,7 +938,7 @@ fn test_cases() {
             // We throw `PackageImportNotDefined`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "/utils/": {
                 "browser": "./a/",
                 "default": "./b/"
@@ -932,7 +950,7 @@ fn test_cases() {
         TestCase {
             name: "incorrect exports field #3",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index": "./a/index.js"
             })),
             request: "#a/index.mjs",
@@ -941,7 +959,7 @@ fn test_cases() {
         TestCase {
             name: "incorrect exports field #4",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index.mjs": "./a/index.js"
             })),
             request: "#a/index",
@@ -950,7 +968,7 @@ fn test_cases() {
         TestCase {
             name: "incorrect exports field #5",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index": {
                 "browser": "./a/index.js",
                 "default": "./b/index.js"
@@ -962,7 +980,7 @@ fn test_cases() {
         TestCase {
             name: "incorrect exports field #6",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/index.mjs": {
                 "browser": "./a/index.js",
                 "default": "./b/index.js"
@@ -976,7 +994,7 @@ fn test_cases() {
             // We don't throw in `package_imports_exports_resolve`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./a/"
             })),
             request: "/utils/index.mjs",
@@ -987,7 +1005,7 @@ fn test_cases() {
             // We don't throw in `package_imports_exports_resolve`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./a/",
                 "default": "./b/"
@@ -1001,7 +1019,7 @@ fn test_cases() {
             // We don't throw in `package_imports_exports_resolve`, it's thrown in `package_imports_resolve`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./a/",
                 "default": "./b/"
@@ -1015,7 +1033,7 @@ fn test_cases() {
             // We don't throw in `package_imports_exports_resolve`, it's thrown in `package_imports_resolve`
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./a/",
                 "default": "./b/"
@@ -1028,7 +1046,7 @@ fn test_cases() {
             name: "incorrect request #5",
             // expect: None,
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./a/",
                 "default": "./b/"
@@ -1041,7 +1059,7 @@ fn test_cases() {
             name: "backtracking package base #1",
             // expect: Some(vec!["./dist/index"]),
             expect: Some(vec!["dist/index"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/../../utils/": "./dist/"
             })),
             request: "#a/../../utils/index",
@@ -1052,7 +1070,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["./dist/../../utils/index"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "./dist/"
             })),
             request: "#a/../../utils/index",
@@ -1063,7 +1081,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["../src/index"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "../src/"
             })),
             request: "#a/index",
@@ -1074,7 +1092,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["./utils/../../../index"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "./utils/../../../"
               }
@@ -1086,7 +1104,7 @@ fn test_cases() {
             name: "nested node_modules path #1",
             // expect: Some(vec!["moment/node_modules/lodash/dist/index.js"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": "moment/node_modules/"
               }
@@ -1099,7 +1117,7 @@ fn test_cases() {
             // We throw InvalidPackageTarget
             // expect: Some(vec!["../node_modules/lodash/dist/index.js"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": "../node_modules/"
             })),
             request: "#a/lodash/dist/index.js",
@@ -1108,7 +1126,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #1",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": "./",
@@ -1124,7 +1142,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #2",
             expect: Some(vec!["./index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1144,7 +1162,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #2",
             expect: Some(vec!["./node/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1162,7 +1180,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #3",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1183,7 +1201,7 @@ fn test_cases() {
             // We throw NotFound
             // expect: Some(vec!["moment/node/index.js"]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1202,7 +1220,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #5",
             expect: Some(vec![]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1225,7 +1243,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #6",
             expect: Some(vec!["./index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1249,7 +1267,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #6",
             expect: Some(vec!["./node/index.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a/": {
                 "browser": {
                   "webpack": [
@@ -1271,7 +1289,7 @@ fn test_cases() {
         TestCase {
             name: "nested mapping #7",
             expect: Some(vec!["./y.js"]),
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": {
                 "abc": {
                   "def": "./x.js"
@@ -1287,7 +1305,7 @@ fn test_cases() {
             // We throw PackageImportNotDefined
             // expect: Some(vec![]),
             expect: None,
-            imports_field: imports_field(json!({
+            imports_field: imports_field(&json!({
               "#a": {
                 "abc": {
                   "def": "./x.js",
@@ -1311,6 +1329,7 @@ fn test_cases() {
                 &cached_path,
                 true,
                 &case.condition_names.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                None,
                 &mut Ctx::default(),
             )
             .map(|p| p.map(|p| p.to_path_buf()));

@@ -1,7 +1,10 @@
 use std::{
     fmt,
     path::{Path, PathBuf},
+    sync::Arc,
 };
+
+use crate::node_path::NodePath;
 
 /// Module Resolution Options
 ///
@@ -14,10 +17,10 @@ pub struct ResolveOptions {
     /// Current working directory, used for testing purposes.
     pub cwd: Option<PathBuf>,
 
-    /// Path to TypeScript configuration file.
+    /// Discover tsconfig automatically or use the specified tsconfig.json path.
     ///
     /// Default `None`
-    pub tsconfig: Option<TsconfigOptions>,
+    pub tsconfig: Option<TsconfigDiscovery>,
 
     /// Create aliases to import or require certain modules more easily.
     ///
@@ -43,11 +46,6 @@ pub struct ResolveOptions {
     ///
     /// Default `[]`
     pub condition_names: Vec<String>,
-
-    /// The JSON files to use for descriptions. (There was once a `bower.json`.)
-    ///
-    /// Default `["package.json"]`
-    pub description_files: Vec<String>,
 
     /// Set to [EnforceExtension::Enabled] for [ESM Mandatory file extensions](https://nodejs.org/api/esm.html#mandatory-file-extensions).
     ///
@@ -118,7 +116,10 @@ pub struct ResolveOptions {
 
     /// A list of directories to resolve modules from, can be absolute path or folder name.
     ///
-    /// Default `["node_modules"]`
+    /// Default `["node_modules"]`.
+    ///
+    /// When `NODE_PATH` is set, absolute entries from `NODE_PATH` are appended during option
+    /// sanitization.
     pub modules: Vec<String>,
 
     /// Resolve to a context instead of a file.
@@ -169,6 +170,17 @@ pub struct ResolveOptions {
     /// Default `true`
     pub symlinks: bool,
 
+    /// Whether to read the `NODE_PATH` environment variable and append its entries to
+    /// [`modules`](ResolveOptions::modules).
+    ///
+    /// `NODE_PATH` is a deprecated Node.js feature that is not part of ESM resolution.
+    /// Set this to `false` to disable the behavior.
+    ///
+    /// See <https://nodejs.org/api/modules.html#loading-from-the-global-folders>
+    ///
+    /// Default `true`
+    pub node_path: bool,
+
     /// Whether to parse [module.builtinModules](https://nodejs.org/api/module.html#modulebuiltinmodules) or not.
     /// For example, "zlib" will throw [crate::ResolveError::Builtin] when set to true.
     ///
@@ -211,6 +223,20 @@ impl ResolveOptions {
     #[must_use]
     pub fn with_condition_names(mut self, names: &[&str]) -> Self {
         self.condition_names = names.iter().map(ToString::to_string).collect::<Vec<String>>();
+        self
+    }
+
+    /// ## Examples
+    ///
+    /// ```
+    /// use unrs_resolver::ResolveOptions;
+    ///
+    /// let options = ResolveOptions::default().with_node_path(false);
+    /// assert_eq!(options.node_path, false)
+    /// ```
+    #[must_use]
+    pub const fn with_node_path(mut self, flag: bool) -> Self {
+        self.node_path = flag;
         self
     }
 
@@ -409,6 +435,11 @@ impl ResolveOptions {
                 self.enforce_extension = EnforceExtension::Disabled;
             }
         }
+
+        if self.node_path {
+            self.modules.extend_from_slice(NodePath::build());
+        }
+
         self
     }
 }
@@ -461,10 +492,25 @@ where
 }
 
 /// Value for [ResolveOptions::restrictions]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Restriction {
     Path(PathBuf),
-    RegExp(String),
+    Fn(Arc<dyn Fn(&Path) -> bool + Sync + Send>),
+}
+
+impl std::fmt::Debug for Restriction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Path(path) => write!(f, "Path(\"{}\")", path.display()),
+            Self::Fn(_) => write!(f, "Fn(<function>)"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TsconfigDiscovery {
+    Auto,
+    Manual(TsconfigOptions),
 }
 
 /// Tsconfig Options for [ResolveOptions::tsconfig]
@@ -483,13 +529,11 @@ pub struct TsconfigOptions {
 }
 
 /// Configuration for [TsconfigOptions::references]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum TsconfigReferences {
     Disabled,
     /// Use the `references` field from tsconfig of `config_file`.
     Auto,
-    /// Manually provided relative or absolute path.
-    Paths(Vec<PathBuf>),
 }
 
 impl Default for ResolveOptions {
@@ -500,7 +544,6 @@ impl Default for ResolveOptions {
             alias: vec![],
             alias_fields: vec![],
             condition_names: vec![],
-            description_files: vec!["package.json".into()],
             enforce_extension: EnforceExtension::Auto,
             extension_alias: vec![],
             exports_fields: vec![vec!["exports".into()]],
@@ -517,6 +560,7 @@ impl Default for ResolveOptions {
             restrictions: vec![],
             roots: vec![],
             symlinks: true,
+            node_path: true,
             builtin_modules: false,
             module_type: false,
             allow_package_exports_in_directory_resolve: false,
@@ -589,6 +633,9 @@ impl fmt::Display for ResolveOptions {
         if self.symlinks {
             write!(f, "symlinks:{:?},", self.symlinks)?;
         }
+        if !self.node_path {
+            write!(f, "node_path:{:?},", self.node_path)?;
+        }
         if self.builtin_modules {
             write!(f, "builtin_modules:{:?},", self.builtin_modules)?;
         }
@@ -608,8 +655,8 @@ mod test {
     use std::path::PathBuf;
 
     use super::{
-        AliasValue, EnforceExtension, ResolveOptions, Restriction, TsconfigOptions,
-        TsconfigReferences,
+        AliasValue, EnforceExtension, ResolveOptions, Restriction, TsconfigDiscovery,
+        TsconfigOptions, TsconfigReferences,
     };
 
     #[test]
@@ -630,10 +677,10 @@ mod test {
     #[test]
     fn display() {
         let options = ResolveOptions {
-            tsconfig: Some(TsconfigOptions {
+            tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
                 config_file: PathBuf::from("tsconfig.json"),
                 references: TsconfigReferences::Auto,
-            }),
+            })),
             alias: vec![("a".into(), vec![AliasValue::Ignore])],
             alias_fields: vec![vec!["browser".into()]],
             condition_names: vec!["require".into()],
@@ -653,16 +700,16 @@ mod test {
             ..ResolveOptions::default()
         };
 
-        let expected = r#"tsconfig:TsconfigOptions { config_file: "tsconfig.json", references: Auto },alias:[("a", [Ignore])],alias_fields:[["browser"]],condition_names:["require"],enforce_extension:Enabled,exports_fields:[["exports"]],imports_fields:[["imports"]],extension_alias:[(".js", [".ts"])],extensions:[".js", ".json", ".node"],fallback:[("fallback", [Ignore])],fully_specified:true,main_fields:["main"],main_files:["index"],modules:["node_modules"],resolve_to_context:true,prefer_relative:true,prefer_absolute:true,restrictions:[Path("restrictions")],roots:["roots"],symlinks:true,builtin_modules:true,allow_package_exports_in_directory_resolve:true,"#;
+        let expected = r#"tsconfig:Manual(TsconfigOptions { config_file: "tsconfig.json", references: Auto }),alias:[("a", [Ignore])],alias_fields:[["browser"]],condition_names:["require"],enforce_extension:Enabled,exports_fields:[["exports"]],imports_fields:[["imports"]],extension_alias:[(".js", [".ts"])],extensions:[".js", ".json", ".node"],fallback:[("fallback", [Ignore])],fully_specified:true,main_fields:["main"],main_files:["index"],modules:["node_modules"],resolve_to_context:true,prefer_relative:true,prefer_absolute:true,restrictions:[Path("restrictions")],roots:["roots"],symlinks:true,builtin_modules:true,allow_package_exports_in_directory_resolve:true,"#;
         assert_eq!(format!("{options}"), expected);
 
         let options = ResolveOptions {
             cwd: None,
             alias: vec![],
             alias_fields: vec![],
+            node_path: true,
             builtin_modules: false,
             condition_names: vec![],
-            description_files: vec![],
             enforce_extension: EnforceExtension::Disabled,
             exports_fields: vec![],
             extension_alias: vec![],

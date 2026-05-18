@@ -1,0 +1,63 @@
+name: Release Plz
+
+permissions: {}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-plz:
+    name: Release-plz
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: oxc-project/release-plz@e2b12f55ad64a22af8e93634b94439c42913afca # v1.0.6
+        id: release-plz
+        with:
+          PAT: ${{ steps.app-token.outputs.token }}
+
+      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+        with:
+          cache-key: warm
+
+      - uses: ./.github/actions/pnpm
+
+      - name: Bump package.json
+        if: ${{ steps.release-plz.outputs.prs_created }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ fromJSON(steps.release-plz.outputs.pr).number }}
+          VERSION: ${{ fromJSON(steps.release-plz.outputs.pr).releases[0].version }}
+        run: |
+          set -e
+
+          pr_number="${PR_NUMBER}"
+
+          if [[ -n "$pr_number" ]]; then
+            version="${VERSION}"
+
+            jq --arg version "${version}" '.version = ($version)' package.json > tmp
+            mv tmp package.json
+            pnpm build
+
+            gh pr checkout $pr_number
+            git add .
+            git commit --amend --no-edit
+            git push --force-with-lease
+          fi

@@ -1,27 +1,25 @@
-import fs from 'node:fs'
+import fs from "node:fs";
 
-const filename = new URL('index.js', import.meta.url)
-
-let data = fs.readFileSync(filename, 'utf-8')
-
+const filename = "./napi/index.js";
+let data = fs.readFileSync(filename, "utf-8");
 data = data.replace(
-  '\nif (!nativeBinding) {',
-  (value) =>
+  "\nif (!nativeBinding) {",
+  (s) =>
     `
-if (!nativeBinding && process.env.SKIP_UNRS_RESOLVER_FALLBACK !== '1') {
+if (!nativeBinding && globalThis.process?.versions?.["webcontainer"]) {
   try {
-    nativeBinding = require('napi-postinstall/fallback')(require.resolve('./package.json'), true)
+    nativeBinding = require('napi-postinstall/fallback')(require.resolve('./package.json'), true);
   } catch (err) {
     loadErrors.push(err)
   }
 }
-` + value,
-)
-
-data = data + `
+` + s,
+);
+data =
+  data +
+  `
 if (process.versions.pnp) {
   process.env.UNRS_RESOLVER_YARN_PNP = '1'
 }
-`
-
-fs.writeFileSync(filename, data)
+`;
+fs.writeFileSync(filename, data);
