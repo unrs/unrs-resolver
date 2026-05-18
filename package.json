@@ -28,7 +28,7 @@
     "fmt": "vp fmt",
     "test": "vp test run -r ./napi",
     "build:debug": "napi build --platform --manifest-path napi/Cargo.toml",
-    "build": "vp run build:debug --features allocator --release",
+    "build": "pnpm build:debug --features allocator --release",
     "postbuild:debug": "node napi/patch.mjs",
     "postinstall": "node postinstall.js",
     "prepublishOnly": "clean-pkg-json -k napi"

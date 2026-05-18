@@ -227,6 +227,8 @@ jobs:
       - name: Prepare dirs and artifacts
         run: |
           cp package.json napi/package.json
+          # prevent `ERR_PNPM_OUTDATED_LOCKFILE` error
+          echo -e "\nverifyDepsBeforeRun: false" >> pnpm-workspace.yaml
           pnpm napi create-npm-dirs
           pnpm napi artifacts --npm-dir npm --build-output-dir napi
 
