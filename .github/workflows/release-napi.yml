@@ -141,7 +141,7 @@ jobs:
         if: ${{ contains(matrix.target, 'ohos') }}
         uses: Boshen/setup-ohos-sdk@edb865a89a712f1f15dbad932dfa9cfce849d95c # v1.0.0
 
-      - uses: goto-bus-stop/setup-zig@abea47f85e598557f500fa1fd2ab7464fcb39406 # v2.2.1
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         if: ${{ contains(matrix.target, 'musl') }}
         with:
           version: 0.14.0
