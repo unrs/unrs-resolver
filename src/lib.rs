@@ -320,8 +320,10 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
     ) -> Result<Resolution, ResolveError> {
         ctx.with_fully_specified(self.options.fully_specified);
 
-        let cached_path = self.cache.value(path);
-        let cached_path = self.require(&cached_path, specifier, tsconfig, ctx)?;
+        let cached_path = self.load_realpath(&self.cache.value(path))?;
+        let cached_path =
+            self.require(&self.cache.value(&cached_path), specifier, tsconfig, ctx)?;
+
         let path = self.load_realpath(&cached_path)?;
 
         let package_json = self.find_package_json_for_a_package(&cached_path, ctx)?;
