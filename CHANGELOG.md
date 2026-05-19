@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1](https://github.com/unrs/unrs-resolver/compare/v1.12.0...v1.12.1) - 2026-05-19
+
+### <!-- 9 -->💼 Other
+
+- Revert "perf: do not canonicalize the entry path ([#848](https://github.com/unrs/unrs-resolver/pull/848))" ([#204](https://github.com/unrs/unrs-resolver/pull/204)) (by @JounQin) - #204
+
+### Contributors
+
+* @JounQin
+
 ## [1.12.0](https://github.com/unrs/unrs-resolver/compare/v1.11.1...v1.12.0) - 2026-05-18
 
 ### <!-- 0 -->🚀 Features
