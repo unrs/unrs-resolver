@@ -338,8 +338,8 @@ UnRS partially copies code from the following projects.
 [ci-url]: https://github.com/unrs/unrs-resolver/actions/workflows/ci.yml?query=event%3Apush+branch%3Amain
 [code-coverage-badge]: https://codecov.io/github/unrs/unrs-resolver/branch/main/graph/badge.svg
 [code-coverage-url]: https://codecov.io/gh/unrs/unrs-resolver
-[sponsors-badge]: https://img.shields.io/github/sponsors/Boshen
-[sponsors-url]: https://github.com/sponsors/Boshen
+[sponsors-badge]: https://img.shields.io/github/sponsors/JounQin
+[sponsors-url]: https://github.com/sponsors/JounQin
 [codspeed-badge]: https://img.shields.io/endpoint?url=https://codspeed.io/badge.json
 [codspeed-url]: https://codspeed.io/unrs/unrs-resolver
 [crates-badge]: https://img.shields.io/crates/dr/unrs_resolver
