@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2](https://github.com/unrs/unrs-resolver/compare/v1.12.1...v1.12.2) - 2026-05-19
+
+### <!-- 0 -->🚀 Features
+
+- feat: add loongarch64 builds (by @wjh-la) - #198
+
+### <!-- 1 -->🐛 Bug Fixes
+
+- gate statx dont-sync flag for loongarch64 musl (by @JounQin) - #209
+
+### Contributors
+
+* @JounQin
+* @wjh-la
+
 ## [1.12.1](https://github.com/unrs/unrs-resolver/compare/v1.12.0...v1.12.1) - 2026-05-19
 
 ### <!-- 9 -->💼 Other
