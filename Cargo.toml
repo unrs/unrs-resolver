@@ -16,11 +16,11 @@ rust-version = "1.88.0"
 description = "ESM / CJS module resolution"
 
 [workspace.dependencies]
-unrs_resolver = { version = "1.12.2", path = "." }
+unrs_resolver = { version = "1.12.3", path = "." }
 
 [package]
 name = "unrs_resolver"
-version = "1.12.2"
+version = "1.12.3"
 authors.workspace = true
 categories.workspace = true
 edition.workspace = true
