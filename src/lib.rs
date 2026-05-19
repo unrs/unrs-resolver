@@ -320,20 +320,11 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
     ) -> Result<Resolution, ResolveError> {
         ctx.with_fully_specified(self.options.fully_specified);
 
-        let cached_path = if self.options.symlinks {
-            self.load_realpath(&self.cache.value(path))?
-        } else {
-            path.to_path_buf()
-        };
+        let cached_path = self.load_realpath(&self.cache.value(path))?;
+        let cached_path =
+            self.require(&self.cache.value(&cached_path), specifier, tsconfig, ctx)?;
 
-        let cached_path = self.cache.value(&cached_path);
-        let cached_path = self.require(&cached_path, specifier, tsconfig, ctx)?;
-
-        let path = if self.options.symlinks {
-            self.load_realpath(&cached_path)?
-        } else {
-            cached_path.to_path_buf()
-        };
+        let path = self.load_realpath(&cached_path)?;
 
         let package_json = self.find_package_json_for_a_package(&cached_path, ctx)?;
         let module_type = self.esm_file_format(&cached_path, ctx)?;
