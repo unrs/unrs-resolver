@@ -173,7 +173,11 @@ impl FileSystemOs {
                 Ok(result.into())
             } else if #[cfg(target_os = "linux")] {
                 use rustix::fs::{AtFlags, CWD, FileType, StatxFlags};
-                match rustix::fs::statx(CWD, path, AtFlags::STATX_DONT_SYNC, StatxFlags::TYPE) {
+                #[cfg(all(target_arch = "loongarch64", target_env = "musl"))]
+                let flags = AtFlags::empty();
+                #[cfg(not(all(target_arch = "loongarch64", target_env = "musl")))]
+                let flags = AtFlags::STATX_DONT_SYNC;
+                match rustix::fs::statx(CWD, path, flags, StatxFlags::TYPE) {
                     Ok(statx) => {
                         let file_type = FileType::from_raw_mode(statx.stx_mode.into());
                         Ok(FileMetadata::new(file_type.is_file(), file_type.is_dir(), file_type.is_symlink()))
