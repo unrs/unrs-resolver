@@ -1,6 +1,9 @@
 //! <https://github.com/webpack/enhanced-resolve/blob/main/test/resolve.test.js>
 
-use crate::{Resolution, ResolveError, ResolveOptions, Resolver};
+use crate::{
+    Resolution, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
+    TsconfigReferences,
+};
 
 #[test]
 fn resolve() {
@@ -84,6 +87,24 @@ fn issue238_resolve() {
     let resolved_path =
         resolver.resolve(f.join("src/common"), "config/myObjectFile").map(|r| r.full_path());
     assert_eq!(resolved_path, Ok(f.join("src/common/config/myObjectFile.js")));
+}
+
+#[test]
+fn tsconfig_no_base_url_alias() {
+    let f = super::fixture_root().join("tsconfig/cases/no-base-url-alias");
+
+    let resolver = Resolver::new(ResolveOptions {
+        alias: vec![("@".into(), vec!["./src".into()])],
+        extensions: vec![".ts".into(), ".js".into(), ".json".into(), ".node".into()],
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("tsconfig.json"),
+            references: TsconfigReferences::Auto,
+        })),
+        ..ResolveOptions::default()
+    });
+
+    let resolved_path = resolver.resolve(f.clone(), "@/foo").map(|r| r.full_path());
+    assert_eq!(resolved_path, Ok(f.join("src/foo.ts")));
 }
 
 #[test]
