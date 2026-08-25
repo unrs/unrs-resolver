@@ -839,18 +839,18 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pnp"
-version = "0.12.9"
+version = "0.12.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d021b5b4a2ea34bf137831fbbc5856e9c7ca70861f95a0f8dc51323b6e821faa"
+checksum = "5a0e591607db15df65036bd424bd57782296da9963d823da5a139ed451f615b5"
 dependencies = [
  "byteorder",
  "concurrent_lru",
- "fancy-regex",
  "flate2",
  "indexmap",
  "nodejs-built-in-modules",
  "pathdiff",
  "radix_trie",
+ "regress",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -961,6 +961,15 @@ name = "regex-syntax"
 version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
+
+[[package]]
+name = "regress"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32eef8b209c3c1c15dbad02c1f30f9539f00dc7253e0cbcdaae442a50a09d7c1"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "rustc-hash"
