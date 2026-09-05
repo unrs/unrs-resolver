@@ -14,7 +14,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: oxc-project/setup-node@ab97f03642370d79a7e96dd286bd02a1be40e0ba # v1.3.0
+    - uses: oxc-project/setup-node@f46a72f95efdc55273fcd042d61c84e723b2892c # v1.4.1
       with:
         architecture: ${{ inputs.architecture }}
         cpu: ${{ inputs.cpu }}

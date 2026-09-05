@@ -78,7 +78,7 @@ name = "dir"
 
 [dependencies]
 cfg-if = "1"
-compact_str = "0.9"
+compact_str = "0.10"
 fast-glob = "1"
 indexmap = { version = "2", features = ["serde"] }
 json-strip-comments = "3.1"
@@ -107,13 +107,13 @@ windows = { version = "0.62.2", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(target_endian = "little")'.dependencies]
 # simd-json only works on little-endian systems
-simd-json = { version = "0.17.0", default-features = false, features = ["runtime-detection"] }
+simd-json = { version = "0.18.0", default-features = false, features = ["runtime-detection"] }
 self_cell = "1" # Used by simd implementation for self-referential struct
 
 [dev-dependencies]
 criterion2 = { version = "3.0.3", default-features = false }
 dirs = { version = "6.0.0" }
-fancy-regex = { version = "^0.18.0", default-features = false, features = ["std"] }
+fancy-regex = { version = "^0.19.0", default-features = false, features = ["std"] }
 pico-args = "0.5.0"
 rayon = { version = "1.12.0" }
 vfs = "0.13.0" # for testing with in memory file system
