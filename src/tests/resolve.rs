@@ -152,6 +152,24 @@ fn resolve_hash_as_module() {
 }
 
 #[test]
+fn prefer_file_over_dir() {
+    // The CJS spec tries `LOAD_AS_FILE(DIR/X)` before `LOAD_AS_DIRECTORY(DIR/X)`,
+    // including when `X` is a bare package name.
+    let f = super::fixture().join("prefer-file-over-dir");
+    let resolver = Resolver::default();
+    #[rustfmt::skip]
+    let data = [
+        ("one level package name", "bar", f.join("node_modules/bar.js")),
+        ("scoped package name", "@foo/bar", f.join("node_modules/@foo/bar.js")),
+        ("directory only", "only-dir", f.join("node_modules/only-dir/index.js")),
+    ];
+    for (comment, request, expected) in data {
+        let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());
+        assert_eq!(resolved_path, Ok(expected), "{comment} {request}");
+    }
+}
+
+#[test]
 fn resolve_edge_cases() {
     let f = super::fixture();
     let resolver = Resolver::default();
