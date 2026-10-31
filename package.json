@@ -36,13 +36,13 @@
     "napi-postinstall": "^0.3.7"
   },
   "devDependencies": {
-    "@emnapi/core": "2.0.0-alpha.6",
-    "@emnapi/runtime": "2.0.0-alpha.6",
+    "@emnapi/core": "2.0.0-beta.2",
+    "@emnapi/runtime": "2.0.0-beta.2",
     "@napi-rs/cli": "^3.8.6",
     "@napi-rs/wasm-runtime": "^1.2.0",
-    "@types/node": "^25.0.8",
-    "clean-pkg-json": "^1.4.2",
-    "emnapi": "2.0.0-alpha.6",
+    "@types/node": "^26.0.0",
+    "clean-pkg-json": "^2.0.0",
+    "emnapi": "2.0.0-beta.2",
     "typescript": "^7.0.0",
     "vite-plus": "catalog:"
   },
@@ -79,5 +79,5 @@
       }
     }
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@12.16.1"
 }
