@@ -242,6 +242,11 @@ jobs:
         with:
           path: artifacts
 
+      # `.node-version` is Node 22, whose bundled npm (10.x) predates OIDC trusted
+      # publishing; `napi pre-publish` shells out to `npm publish` for the platform
+      # packages, so it needs npm >= 11.5.1 to mint the token from id-token: write.
+      - run: npm install -g npm@latest
+
       - name: Prepare dirs and artifacts
         run: |
           cp package.json napi/package.json
