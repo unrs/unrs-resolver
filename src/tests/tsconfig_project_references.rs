@@ -170,6 +170,33 @@ fn referenced_paths_win_over_root_with_no_paths() {
 }
 
 #[test]
+fn sibling_reference_without_paths_does_not_shadow_parent() {
+    // https://github.com/unrs/unrs-resolver/issues/221
+    // The referenced `tsconfig.node.json` lives in the same directory as the parent and
+    // has no `paths`; it must not take over alias resolution for the parent's files.
+    let f = super::fixture_root().join("tsconfig/cases/project-references-sibling-paths");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("tsconfig.json"),
+            references: TsconfigReferences::Auto,
+        })),
+        ..ResolveOptions::default()
+    });
+
+    let expected = f.join("src/utils/helper.ts");
+    assert_eq!(
+        resolver.resolve(f.join("src"), "$/utils/helper").map(|r| r.full_path()),
+        Ok(expected.clone()),
+    );
+    assert_eq!(
+        resolver.resolve_file(f.join("src/app.ts"), "$/utils/helper").map(|r| r.full_path()),
+        Ok(expected),
+    );
+}
+
+#[test]
 fn walk_up_when_ref_files_does_not_cover_file() {
     let f = super::fixture_root().join("tsconfig/cases/project-references-walk-up/files-misses");
 
