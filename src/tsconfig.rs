@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    cmp::Reverse,
     fmt::Debug,
     hash::BuildHasherDefault,
     path::{Path, PathBuf},
@@ -24,8 +23,6 @@ use crate::{TsconfigReferences, path::PathUtil, replace_bom_with_whitespace};
 /// Allow list: <https://github.com/microsoft/TypeScript/issues/57485#issuecomment-2027787456>
 const TEMPLATE_VARIABLE: &str = "${configDir}";
 
-const GLOB_ALL_PATTERN: &str = "**/*";
-
 pub type CompilerOptionsPathsMap = IndexMap<String, Vec<PathBuf>, BuildHasherDefault<FxHasher>>;
 
 /// Project Reference
@@ -40,7 +37,7 @@ pub struct ProjectReference {
 #[serde(rename_all = "camelCase")]
 pub struct TsConfig {
     /// Whether this is the caller tsconfig.
-    /// Used for final template variable substitution when all configs are extended and merged.
+    /// `false` for configs loaded through `extends`.
     #[serde(skip)]
     pub root: bool,
 
@@ -81,10 +78,24 @@ pub struct TsConfig {
 impl TsConfig {
     /// Parses the tsconfig from a JSON string.
     ///
+    /// `path` is the requested path (used as identity for cache lookup and error
+    /// reporting). `canonical_path` anchors `baseUrl` / `paths` at the real
+    /// tsconfig directory when `extends` traverses a symlink. Callers that don't
+    /// care about symlinks may pass the same value for both.
+    ///
     /// # Errors
     ///
     /// * Any error that can be returned by `serde_json::from_str()`.
-    pub fn parse(root: bool, path: &Path, json: String) -> Result<Self, serde_json::Error> {
+    ///
+    /// # Panics
+    ///
+    /// * When `canonical_path` has no parent directory.
+    pub fn parse(
+        root: bool,
+        path: &Path,
+        canonical_path: &Path,
+        json: String,
+    ) -> Result<Self, serde_json::Error> {
         let mut json = json.into_bytes();
         replace_bom_with_whitespace(&mut json);
         _ = json_strip_comments::strip_slice(&mut json);
@@ -95,22 +106,40 @@ impl TsConfig {
         };
         tsconfig.root = root;
         tsconfig.path = path.to_path_buf();
+        let canonical_directory = canonical_path.parent().unwrap();
         tsconfig.compiler_options.paths_base =
             tsconfig.compiler_options.base_url.as_ref().map_or_else(
-                || tsconfig.directory().to_path_buf(),
+                || canonical_directory.to_path_buf(),
                 |base_url| {
                     if base_url.to_string_lossy().starts_with(TEMPLATE_VARIABLE) {
                         base_url.clone()
                     } else {
-                        tsconfig.directory().normalize_with(base_url)
+                        canonical_directory.normalize_with(base_url)
                     }
                 },
             );
+        if let Some(root_dirs) = &mut tsconfig.compiler_options.root_dirs {
+            for root_dir in root_dirs.iter_mut() {
+                if !root_dir.to_string_lossy().starts_with(TEMPLATE_VARIABLE) {
+                    *root_dir = canonical_directory.normalize_with(&root_dir);
+                }
+            }
+        }
+        if let Some(out_dir) = &mut tsconfig.compiler_options.out_dir
+            && !out_dir.to_string_lossy().starts_with(TEMPLATE_VARIABLE)
+        {
+            *out_dir = canonical_directory.normalize_with(&out_dir);
+        }
+        if let Some(declaration_dir) = &mut tsconfig.compiler_options.declaration_dir
+            && !declaration_dir.to_string_lossy().starts_with(TEMPLATE_VARIABLE)
+        {
+            *declaration_dir = canonical_directory.normalize_with(&declaration_dir);
+        }
         Ok(tsconfig)
     }
 
     /// Whether this is the caller tsconfig.
-    /// Used for final template variable substitution when all configs are extended and merged.
+    /// `false` for configs loaded through `extends`.
     #[must_use]
     pub fn root(&self) -> bool {
         self.root
@@ -166,7 +195,7 @@ impl TsConfig {
     pub(crate) fn load_references(&mut self, references: TsconfigReferences) -> bool {
         match references {
             TsconfigReferences::Disabled => {
-                self.references.drain(..);
+                self.references.clear();
             }
             TsconfigReferences::Auto => {}
         }
@@ -174,7 +203,7 @@ impl TsConfig {
     }
 
     /// Inherits settings from the given tsconfig into `self`.
-    #[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
+    #[expect(clippy::too_many_lines, reason = "field-by-field merge of every inherited setting")]
     pub(crate) fn extend_tsconfig(&mut self, tsconfig: &Self) {
         if self.files.is_none()
             && let Some(files) = &tsconfig.files
@@ -221,6 +250,18 @@ impl TsConfig {
                 &tsconfig.compiler_options.emit_decorator_metadata
         {
             compiler_options.emit_decorator_metadata = Some(*emit_decorator_metadata);
+        }
+
+        if compiler_options.strict.is_none()
+            && let Some(strict) = &tsconfig.compiler_options.strict
+        {
+            compiler_options.strict = Some(*strict);
+        }
+
+        if compiler_options.strict_null_checks.is_none()
+            && let Some(strict_null_checks) = &tsconfig.compiler_options.strict_null_checks
+        {
+            compiler_options.strict_null_checks = Some(*strict_null_checks);
         }
 
         if compiler_options.use_define_for_class_fields.is_none()
@@ -304,7 +345,32 @@ impl TsConfig {
         {
             compiler_options.root_dirs = Some(root_dirs.clone());
         }
+
+        if compiler_options.out_dir.is_none()
+            && let Some(out_dir) = &tsconfig.compiler_options.out_dir
+        {
+            compiler_options.out_dir = Some(out_dir.clone());
+        }
+
+        if compiler_options.declaration_dir.is_none()
+            && let Some(declaration_dir) = &tsconfig.compiler_options.declaration_dir
+        {
+            compiler_options.declaration_dir = Some(declaration_dir.clone());
+        }
+
+        if compiler_options.resolve_json_module.is_none()
+            && let Some(resolve_json_module) = &tsconfig.compiler_options.resolve_json_module
+        {
+            compiler_options.resolve_json_module = Some(*resolve_json_module);
+        }
+
+        if compiler_options.check_js.is_none()
+            && let Some(check_js) = &tsconfig.compiler_options.check_js
+        {
+            compiler_options.check_js = Some(*check_js);
+        }
     }
+
     /// "Build" the root tsconfig, resolve:
     ///
     /// * `{configDir}` template variable
@@ -348,8 +414,24 @@ impl TsConfig {
 
         if let Some(root_dirs) = &mut self.compiler_options.root_dirs {
             for root_dir in root_dirs.iter_mut() {
-                *root_dir = config_dir.normalize_with(&root_dir);
+                if let Some(stripped_path) =
+                    root_dir.to_string_lossy().strip_prefix(TEMPLATE_VARIABLE)
+                {
+                    *root_dir = config_dir.join(stripped_path.trim_start_matches('/'));
+                }
             }
+        }
+
+        if let Some(out_dir) = &mut self.compiler_options.out_dir
+            && let Some(stripped_path) = out_dir.to_string_lossy().strip_prefix(TEMPLATE_VARIABLE)
+        {
+            *out_dir = config_dir.join(stripped_path.trim_start_matches('/'));
+        }
+        if let Some(declaration_dir) = &mut self.compiler_options.declaration_dir
+            && let Some(stripped_path) =
+                declaration_dir.to_string_lossy().strip_prefix(TEMPLATE_VARIABLE)
+        {
+            *declaration_dir = config_dir.join(stripped_path.trim_start_matches('/'));
         }
 
         if let Some(paths_map) = &mut self.compiler_options.paths {
@@ -374,7 +456,7 @@ impl TsConfig {
         self
     }
 
-    #[expect(clippy::option_if_let_else)]
+    #[expect(clippy::option_if_let_else, reason = "the if/else reads clearer than `map_or_else`")]
     fn adjust_path(&self, path: PathBuf) -> PathBuf {
         if let Some(stripped) = path.to_string_lossy().strip_prefix(TEMPLATE_VARIABLE) {
             self.directory().join(stripped.trim_start_matches('/'))
@@ -437,6 +519,29 @@ impl TsConfig {
             .is_some()
             .then(|| self.compiler_options.paths_base.normalize_with(specifier))
     }
+
+    /// Maps a non-relative module `specifier` through this tsconfig's `compilerOptions.paths`
+    /// and `baseUrl` configuration, returning the mapped absolute path candidates without
+    /// checking whether they exist on disk.
+    ///
+    /// Unlike normal resolution (e.g. [`crate::ResolverImpl::resolve_file`]), which discards
+    /// a `paths`/`baseUrl` mapping when the mapped path does not point at a real file, this
+    /// keeps the mapping. It is intended for callers that need the alias mapping for a specifier
+    /// that is not expected to resolve to a real file, such as glob patterns used by
+    /// `import.meta.glob` (e.g. `@/foo/**/*`).
+    ///
+    /// Discover the tsconfig for an importing file with [`crate::ResolverImpl::find_tsconfig`],
+    /// which resolves project references so the returned config is the one that owns the file.
+    #[must_use]
+    pub fn resolve_path_alias_or_base_url(&self, specifier: &str) -> Vec<PathBuf> {
+        let mut paths = self.resolve_path_alias(specifier);
+        if paths.is_empty()
+            && let Some(base_url_path) = self.resolve_base_url(specifier)
+        {
+            paths.push(base_url_path);
+        }
+        paths
+    }
 }
 
 /// Compiler Options
@@ -463,6 +568,12 @@ pub struct CompilerOptions {
 
     /// <https://www.typescriptlang.org/tsconfig/#emitDecoratorMetadata>
     pub emit_decorator_metadata: Option<bool>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#strict>
+    pub strict: Option<bool>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#strictNullChecks>
+    pub strict_null_checks: Option<bool>,
 
     /// <https://www.typescriptlang.org/tsconfig/#useDefineForClassFields>
     pub use_define_for_class_fields: Option<bool>,
@@ -502,6 +613,18 @@ pub struct CompilerOptions {
 
     /// <https://www.typescriptlang.org/tsconfig/#rootDirs>
     pub root_dirs: Option<Vec<PathBuf>>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#outDir>
+    pub out_dir: Option<PathBuf>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#declarationDir>
+    pub declaration_dir: Option<PathBuf>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#resolveJsonModule>
+    pub resolve_json_module: Option<bool>,
+
+    /// <https://www.typescriptlang.org/tsconfig/#checkJs>
+    pub check_js: Option<bool>,
 }
 
 /// Value for the "extends" field.
@@ -520,12 +643,15 @@ enum GlobPattern<'a> {
     All,
 }
 
+/// Normalize Windows `\` to `/` for glob matching, without allocating when there's nothing to replace.
+fn to_forward_slashes(s: Cow<'_, str>) -> Cow<'_, str> {
+    if s.contains('\\') { Cow::Owned(s.replace('\\', "/")) } else { s }
+}
+
 /// Tsconfig resolver
 impl TsConfig {
     pub(crate) fn resolve_tsconfig_solution(tsconfig: Arc<Self>, path: &Path) -> Arc<Self> {
         if !tsconfig.references_resolved.is_empty()
-            && tsconfig.is_file_extension_allowed_in_tsconfig(path)
-            && !tsconfig.is_file_included_in_tsconfig(path)
             && let Some(solution_tsconfig) = tsconfig
                 .references_resolved
                 .iter()
@@ -537,13 +663,43 @@ impl TsConfig {
         tsconfig
     }
 
+    /// Whether this tsconfig (directly or via a referenced sub-project) claims
+    /// ownership of `path`. Used by tsconfig auto-discovery to decide whether
+    /// to keep walking up to an ancestor `tsconfig.json` when the nearest one
+    /// doesn't actually cover the file via its `files` / `include` / `exclude`
+    /// or via a matching reference.
+    pub(crate) fn claims_ownership_of(&self, path: &Path) -> bool {
+        // Any matching reference claims ownership (consistent with
+        // resolve_tsconfig_solution).
+        if self.references_resolved.iter().any(|r| r.is_file_included_in_tsconfig(path)) {
+            return true;
+        }
+        // Solution-style configs (have `references` and explicit empty
+        // `files` / `include`) never claim files themselves. Per the
+        // TypeScript spec, an *omitted* `include` defaults to `**/*`, so it
+        // must fall through to `is_file_included_in_tsconfig`; only an
+        // explicit empty array means "own no files".
+        let is_solution_style = !self.references_resolved.is_empty()
+            && matches!(self.files.as_deref(), Some([]))
+            && matches!(self.include.as_deref(), Some([]));
+        if is_solution_style {
+            return false;
+        }
+        self.is_file_included_in_tsconfig(path)
+    }
+
     fn is_file_included_in_tsconfig(&self, path: &Path) -> bool {
         // 1. Check files array (highest priority - overrides exclude)
         if self.files.as_ref().is_some_and(|files| files.iter().any(|file| Path::new(file) == path))
         {
             return true;
         }
-        // 2. Check include patterns
+        // 2. Reject non-program inputs: a `.js`-family file with `allowJs` off
+        //    (even if a glob names `.js`), or an extensionless path
+        if self.is_extensionless_or_uncompiled_js(path) {
+            return false;
+        }
+        // 3. Check include patterns
         let is_included = self.include.as_ref().map_or_else(
             || {
                 if self.files.is_some() {
@@ -554,7 +710,7 @@ impl TsConfig {
             },
             |include_patterns| self.is_glob_matches(path, GlobPattern::Pattern(include_patterns)),
         );
-        // 3. Check exclude patterns
+        // 4. Check exclude patterns
         if is_included {
             return self.exclude.as_ref().is_none_or(|exclude_patterns| {
                 !self.is_glob_matches(path, GlobPattern::Pattern(exclude_patterns))
@@ -564,22 +720,26 @@ impl TsConfig {
     }
 
     fn is_glob_matches(&self, path: &Path, pattern: GlobPattern) -> bool {
-        let path_str = path.to_string_lossy().replace('\\', "/");
         match pattern {
-            GlobPattern::All => self.is_glob_match(GLOB_ALL_PATTERN, path, &path_str),
-            GlobPattern::Pattern(patterns) => patterns.iter().any(|pattern| {
-                let pattern = pattern.to_string_lossy().replace('\\', "/");
-                self.is_glob_match(pattern.as_ref(), path, &path_str)
-            }),
+            // The default `**/*` is scoped to the tsconfig directory; as a
+            // wildcard pattern it is restricted to the configured TS/JS
+            // extensions, same as the gate in `is_glob_match`.
+            GlobPattern::All => {
+                path.starts_with(self.directory())
+                    && self.is_file_extension_allowed_in_tsconfig(path)
+            }
+            GlobPattern::Pattern(patterns) => {
+                let path_str = to_forward_slashes(path.to_string_lossy());
+                patterns.iter().any(|pattern| {
+                    let pattern = to_forward_slashes(pattern.to_string_lossy());
+                    self.is_glob_match(pattern.as_ref(), path, path_str.as_ref())
+                })
+            }
         }
     }
 
     fn is_glob_match(&self, pattern: &str, path: &Path, path_str: &str) -> bool {
         if pattern == path_str {
-            return true;
-        }
-        // Special case: **/* matches everything
-        if pattern == GLOB_ALL_PATTERN {
             return true;
         }
         // Normalize pattern: add implicit /**/* for directory patterns
@@ -594,7 +754,14 @@ impl TsConfig {
         } else {
             Cow::Borrowed(pattern)
         };
-        // Fast check: if pattern ends with *, filename must have valid extension
+        // Extension gate, applied only to wildcard-terminated patterns: a pattern
+        // ending in `*` (e.g. the default `**/*`, or a bare directory like `src`
+        // that expands to `src/**/*`) matches "any file", so — mirroring
+        // TypeScript — it is restricted to the configured TS/JS extensions.
+        // A pattern naming an explicit extension (e.g. `src/**/*.vue`) does not
+        // end in `*` and is matched verbatim below; this is what lets
+        // solution-style tsconfigs claim explicitly-included non-TS files such
+        // as `.vue` / `.svelte` (e.g. the Vite Vue scaffold).
         if pattern.ends_with('*') && !self.is_file_extension_allowed_in_tsconfig(path) {
             return false;
         }
@@ -609,6 +776,17 @@ impl TsConfig {
             TS_EXTENSIONS.contains(&ext)
                 || if allow_js { JS_EXTENSIONS.contains(&ext) } else { false }
         })
+    }
+
+    /// Whether `path` has no extension (typically a directory) or a `.js`-family
+    /// extension this tsconfig does not compile (`allowJs` off). Unlike
+    /// `is_file_extension_allowed_in_tsconfig`, it excludes genuine non-TS files
+    /// (e.g. `.vue`), which must instead be claimed through `include`.
+    fn is_extensionless_or_uncompiled_js(&self, path: &Path) -> bool {
+        let allow_js = self.compiler_options.allow_js.is_some_and(|b| b);
+        path.extension()
+            .and_then(|ext| ext.to_str())
+            .is_none_or(|ext| !allow_js && matches!(ext, "js" | "jsx" | "mjs" | "cjs"))
     }
 }
 
@@ -634,35 +812,40 @@ enum CompiledTsconfigPathTarget {
 
 impl CompiledTsconfigPaths {
     fn new(paths_map: &CompilerOptionsPathsMap) -> Self {
-        let mut wildcard_patterns = paths_map
-            .iter()
-            .filter_map(|(key, paths)| {
-                let (prefix, suffix) = key.split_once('*')?;
-                let targets = paths
-                    .iter()
-                    .map(|path| {
-                        let path_str = path.to_string_lossy();
-                        path_str.split_once('*').map_or_else(
-                            || CompiledTsconfigPathTarget::Static(path.clone()),
-                            |(target_prefix, target_suffix)| CompiledTsconfigPathTarget::Wildcard {
-                                prefix: CompactString::new(target_prefix),
-                                suffix: CompactString::new(target_suffix),
-                            },
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                Some(CompiledTsconfigPathPattern {
-                    prefix: CompactString::new(prefix),
-                    suffix: CompactString::new(suffix),
-                    prefix_len: prefix.len(),
-                    suffix_len: suffix.len(),
-                    targets,
+        let mut wildcard_patterns =
+            Vec::<CompiledTsconfigPathPattern>::with_capacity(paths_map.len());
+        for (key, paths) in paths_map {
+            let Some((prefix, suffix)) = key.split_once('*') else {
+                continue;
+            };
+            let targets = paths
+                .iter()
+                .map(|path| {
+                    let path_str = path.to_string_lossy();
+                    path_str.split_once('*').map_or_else(
+                        || CompiledTsconfigPathTarget::Static(path.clone()),
+                        |(target_prefix, target_suffix)| CompiledTsconfigPathTarget::Wildcard {
+                            prefix: CompactString::new(target_prefix),
+                            suffix: CompactString::new(target_suffix),
+                        },
+                    )
                 })
-            })
-            .collect::<Vec<_>>();
+                .collect::<Vec<_>>();
+            let pattern = CompiledTsconfigPathPattern {
+                prefix: CompactString::new(prefix),
+                suffix: CompactString::new(suffix),
+                prefix_len: prefix.len(),
+                suffix_len: suffix.len(),
+                targets,
+            };
 
-        // Match longer prefixes first. Equal-length prefixes keep insertion order.
-        wildcard_patterns.sort_by_key(|pattern| Reverse(pattern.prefix_len));
+            // Match longer prefixes first. Equal-length prefixes keep insertion order.
+            let index = wildcard_patterns
+                .iter()
+                .position(|existing| existing.prefix_len < pattern.prefix_len)
+                .unwrap_or(wildcard_patterns.len());
+            wildcard_patterns.insert(index, pattern);
+        }
 
         Self { wildcard_patterns }
     }

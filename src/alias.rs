@@ -3,18 +3,76 @@ use std::{borrow::Cow, path::Path};
 use compact_str::CompactString;
 
 use crate::{
-    Alias, AliasValue, CachedPath, FileSystem, ResolveError, ResolverGeneric, TsConfig,
+    Alias, AliasValue, CachedPath, ResolveError, ResolverImpl, TsConfig,
     context::ResolveContext as Ctx,
     path::{PathUtil, SLASH_START},
 };
 
-pub type CompiledAlias = Vec<CompiledAliasEntry>;
+#[derive(Clone, Default)]
+pub struct CompiledAlias {
+    entries: Vec<CompiledAliasEntry>,
+    /// First byte of each entry's key (or wildcard prefix), parallel to `entries`. Packed
+    /// contiguously so the per-specifier scan touches one or two cache lines instead of striding
+    /// over the ~100-byte entries. `0` marks an entry that must always be evaluated (an empty
+    /// key/prefix can match any specifier); a key genuinely starting with NUL also maps to `0`,
+    /// which just skips its fast-reject.
+    first_bytes: Box<[u8]>,
+    /// 256-bit set of `first_bytes` values for an O(1) "no entry can match" exit.
+    byte_mask: [u64; 4],
+}
+
+impl CompiledAlias {
+    fn mask_contains(&self, byte: u8) -> bool {
+        self.byte_mask[usize::from(byte >> 6)] & (1u64 << (byte & 63)) != 0
+    }
+
+    /// Whether any entry's first byte is compatible with `specifier`, without touching the
+    /// entries. `0` in the mask means an always-evaluated entry exists.
+    fn may_match(&self, specifier: &[u8]) -> bool {
+        self.mask_contains(0) || specifier.first().is_some_and(|&byte| self.mask_contains(byte))
+    }
+
+    /// Entries whose first byte is compatible with `specifier`, in declaration order. This is
+    /// only the fast-reject; callers still confirm with [`CompiledAliasEntry::key_matches`].
+    fn matching<'a>(&'a self, specifier: &'a [u8]) -> impl Iterator<Item = &'a CompiledAliasEntry> {
+        let first = specifier.first().copied();
+        self.first_bytes
+            .iter()
+            .zip(&self.entries)
+            .filter(move |&(&byte, _)| byte == 0 || Some(byte) == first)
+            .map(|(_, entry)| entry)
+    }
+
+    /// Whether any entry's key matches `specifier` (raw bytes), gated by the first-byte mask.
+    /// This runs for every file candidate when `alias` is configured, so on the common path
+    /// (no always-evaluated entry) it jumps straight to candidate entries with `memchr` instead
+    /// of scanning `first_bytes` with a branch per entry.
+    pub(crate) fn any_key_matches(&self, specifier: &[u8]) -> bool {
+        if !self.may_match(specifier) {
+            return false;
+        }
+        if self.mask_contains(0) {
+            return self.matching(specifier).any(|entry| entry.key_matches(specifier));
+        }
+        // `may_match` returned true without a `0` entry, so the specifier is non-empty.
+        let Some(&first) = specifier.first() else {
+            return false;
+        };
+        memchr::memchr_iter(first, &self.first_bytes)
+            .any(|index| self.entries[index].key_matches(specifier))
+    }
+}
 
 #[derive(Clone)]
 pub struct CompiledAliasEntry {
     key: CompactString,
     match_kind: AliasMatchKind,
     specifiers: Vec<AliasValue>,
+    /// First byte of the key (or wildcard prefix), cached so the alias loop can fast-reject
+    /// non-matching entries without dispatching into the match-kind branch. `None` means an
+    /// empty key/prefix — which can match any specifier (e.g. a `*` wildcard) — so the entry
+    /// is always evaluated.
+    match_first_byte: Option<u8>,
 }
 
 #[derive(Clone)]
@@ -25,7 +83,7 @@ pub enum AliasMatchKind {
 }
 
 pub fn compile_alias(aliases: &Alias) -> CompiledAlias {
-    aliases
+    let entries: Vec<CompiledAliasEntry> = aliases
         .iter()
         .map(|(key, specifiers)| {
             let (key, match_kind) = key.strip_suffix('$').map_or_else(
@@ -44,24 +102,44 @@ pub fn compile_alias(aliases: &Alias) -> CompiledAlias {
                 },
                 |stripped_key| (CompactString::new(stripped_key), AliasMatchKind::Exact),
             );
-            CompiledAliasEntry { key, match_kind, specifiers: specifiers.clone() }
+            let match_first_byte = match &match_kind {
+                AliasMatchKind::Exact | AliasMatchKind::Prefix => key.as_bytes().first().copied(),
+                AliasMatchKind::Wildcard { prefix, .. } => prefix.as_bytes().first().copied(),
+            };
+            CompiledAliasEntry { key, match_kind, specifiers: specifiers.clone(), match_first_byte }
         })
-        .collect()
+        .collect();
+    let first_bytes: Box<[u8]> =
+        entries.iter().map(|entry| entry.match_first_byte.unwrap_or(0)).collect();
+    let mut byte_mask = [0u64; 4];
+    for &byte in &first_bytes {
+        byte_mask[usize::from(byte >> 6)] |= 1u64 << (byte & 63);
+    }
+    CompiledAlias { entries, first_bytes, byte_mask }
 }
 
-impl<Fs: FileSystem> ResolverGeneric<Fs> {
-    pub(super) fn load_alias_by_options(
-        &self,
-        cached_path: &CachedPath,
-        specifier: &str,
-        aliases: &Alias,
-        tsconfig: Option<&TsConfig>,
-        ctx: &mut Ctx,
-    ) -> Result<Option<CachedPath>, ResolveError> {
-        let compiled_aliases = compile_alias(aliases);
-        self.load_alias(cached_path, specifier, &compiled_aliases, tsconfig, ctx)
+impl CompiledAliasEntry {
+    /// Whether this entry's key matches `specifier` (raw bytes). Matching on bytes lets a caller
+    /// gate on a path's `OsStr` without paying for UTF-8 validation up front.
+    pub(crate) fn key_matches(&self, specifier: &[u8]) -> bool {
+        // Fast-reject on the required first byte; `None` matches any specifier.
+        if let Some(required) = self.match_first_byte
+            && Some(required) != specifier.first().copied()
+        {
+            return false;
+        }
+        match &self.match_kind {
+            AliasMatchKind::Exact => self.key.as_bytes() == specifier,
+            // Prefix/suffix is validated later in `load_alias_value`.
+            AliasMatchKind::Wildcard { .. } => true,
+            AliasMatchKind::Prefix => specifier
+                .strip_prefix(self.key.as_bytes())
+                .is_some_and(|tail| tail.is_empty() || matches!(tail.first(), Some(b'/' | b'\\'))),
+        }
     }
+}
 
+impl ResolverImpl {
     /// enhanced-resolve: AliasPlugin for [crate::ResolveOptions::alias] and [crate::ResolveOptions::fallback].
     pub(super) fn load_alias(
         &self,
@@ -71,21 +149,14 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
         tsconfig: Option<&TsConfig>,
         ctx: &mut Ctx,
     ) -> Result<Option<CachedPath>, ResolveError> {
-        for alias in aliases {
-            let alias_key = alias.key.as_str();
-            match &alias.match_kind {
-                AliasMatchKind::Exact => {
-                    if alias_key != specifier {
-                        continue;
-                    }
-                }
-                AliasMatchKind::Wildcard { .. } => {}
-                AliasMatchKind::Prefix => {
-                    if Self::strip_package_name(specifier, alias_key).is_none() {
-                        continue;
-                    }
-                }
+        if !aliases.may_match(specifier.as_bytes()) {
+            return Ok(None);
+        }
+        for alias in aliases.matching(specifier.as_bytes()) {
+            if !alias.key_matches(specifier.as_bytes()) {
+                continue;
             }
+            let alias_key = alias.key.as_str();
             // It should stop resolving when all of the tried alias values
             // failed to resolve.
             // <https://github.com/webpack/enhanced-resolve/blob/570337b969eee46120a18b62b72809a3246147da/lib/AliasPlugin.js#L65>
@@ -159,7 +230,7 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
                         let alias_path = Path::new(alias_value).normalize();
                         // Must not append anything to alias_value if it is a file.
                         let cached_alias_path = self.cache.value(&alias_path);
-                        if self.cache.is_file(&cached_alias_path, ctx) {
+                        if self.is_file(&cached_alias_path, ctx) {
                             return Ok(None);
                         }
                         // Remove the leading slash so the final path is concatenated.

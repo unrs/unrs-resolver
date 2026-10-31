@@ -152,3 +152,227 @@ fn references_with_extends() {
 
     assert_eq!(resolved_path, Ok(f.join("src/pages/index.tsx")));
 }
+
+#[test]
+fn referenced_paths_win_over_root_with_no_paths() {
+    let f = super::fixture_root().join("tsconfig/cases/project-references-priority");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let resolved_path =
+        resolver.resolve_file(f.join("app/index.ts"), "1/foo").map(|f| f.full_path());
+
+    assert_eq!(resolved_path, Ok(f.join("lib/foo.ts")));
+}
+
+#[test]
+fn walk_up_when_ref_files_does_not_cover_file() {
+    let f = super::fixture_root().join("tsconfig/cases/project-references-walk-up/files-misses");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let tsconfig = resolver.find_tsconfig(f.join("pkg-a/src/bar.ts")).unwrap().unwrap();
+    assert_eq!(tsconfig.path(), f.join("tsconfig.json"));
+
+    let resolved_path =
+        resolver.resolve_file(f.join("pkg-a/src/bar.ts"), "@/foo").map(|f| f.full_path());
+    assert_eq!(resolved_path, Err(ResolveError::NotFound("@/foo".into())));
+}
+
+#[test]
+fn walk_up_when_ref_excludes_file() {
+    let f = super::fixture_root().join("tsconfig/cases/project-references-walk-up/exclude-pattern");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let tsconfig = resolver.find_tsconfig(f.join("pkg-a/src/excluded/bar.ts")).unwrap().unwrap();
+    assert_eq!(tsconfig.path(), f.join("tsconfig.json"));
+
+    let resolved_path =
+        resolver.resolve_file(f.join("pkg-a/src/excluded/bar.ts"), "@/foo").map(|f| f.full_path());
+    assert_eq!(resolved_path, Err(ResolveError::NotFound("@/foo".into())));
+}
+
+#[test]
+fn referenced_config_allow_js_uses_own_setting() {
+    // A Vite-style solution `tsconfig.json` (empty `include`, only `references`)
+    // does not set `allowJs`, but the referenced `tsconfig.app.json` does. When
+    // resolving from a `.js` file, the solution must defer to the referenced
+    // project — whose own `allowJs` lets it claim the file — so its `paths`
+    // alias applies. Previously the solution checked the *parent's* `allowJs`,
+    // which dropped the `.js` file before any reference was consulted.
+    let f = super::fixture_root().join("tsconfig/cases/project-references-ref-allow-js");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".js".into(), ".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let resolved_path =
+        resolver.resolve_file(f.join("src/index.js"), "@alias/foo.js").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f.join("src/foo.js")));
+}
+
+/// Counterpart to `referenced_config_allow_js_uses_own_setting` for `allowJs`
+/// *off*. The referenced project lists `src/**/*.js` in `include`, but with
+/// `allowJs` off a `.js` file is not part of its program (TypeScript drops the
+/// extension before the globs are consulted), so it must not claim a `.js`
+/// importer through the solution. A `.ts` importer the same `include` genuinely
+/// covers still routes through it.
+#[test]
+fn referenced_config_drops_js_when_allow_js_off() {
+    let f = super::fixture_root().join("tsconfig/cases/referenced-allow-js-off");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into(), ".js".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    // `.ts` importer: covered by `src/**/*.ts`, so `@lib/*` resolves.
+    let covered =
+        resolver.resolve_file(f.join("src/consumer.ts"), "@lib/foo.ts").map(|f| f.full_path());
+    assert_eq!(covered, Ok(f.join("src/foo.ts")));
+
+    // `.js` importer: dropped because `allowJs` is off, so `@lib/*` does not
+    // apply and the alias is left unresolved.
+    let dropped =
+        resolver.resolve_file(f.join("src/consumer.js"), "@lib/foo.ts").map(|f| f.full_path());
+    assert_eq!(dropped, Err(ResolveError::NotFound("@lib/foo.ts".into())));
+}
+
+#[test]
+fn root_paths_apply_to_default_include_files() {
+    let f = super::fixture_root().join("tsconfig/cases/project-references-default-include");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let resolved_path =
+        resolver.resolve_file(f.join("index.ts"), "@app/util").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f.join("src/util.ts")));
+}
+
+/// Regression test for <https://github.com/vitejs/vite/issues/22047>.
+///
+/// A solution-style root `tsconfig.json` (`"files": []` + `references`) whose
+/// referenced project declares `paths` and explicitly includes non-TS
+/// extensions (`src/**/*.vue`, `src/**/*.svelte`), as scaffolded by Vite. An
+/// import originating from such a non-TS file must resolve through the
+/// referenced project's `paths`, exactly like an import from a `.ts` file.
+///
+/// Previously the importer's extension was rejected before the `include` globs
+/// were consulted, so a `.vue` / `.svelte` importer never matched the
+/// referenced project and the empty solution root (which owns no `paths`) was
+/// selected, leaving the `@/*` alias unresolved.
+#[test]
+fn solution_style_non_ts_extensions() {
+    let f = super::fixture_root().join("tsconfig/cases/solution-style-non-ts");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into(), ".tsx".into(), ".vue".into(), ".svelte".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let hello = f.join("src/components/HelloWorld.vue");
+
+    #[rustfmt::skip]
+    let pass = [
+        // `.vue` importer (the original bug) resolves the alias.
+        (f.join("src/App.vue"),       "@/components/HelloWorld.vue", hello.clone()),
+        // Any explicitly-included extension works, not just `.vue`.
+        (f.join("src/Widget.svelte"), "@/components/HelloWorld.vue", hello.clone()),
+        // `.ts` importers keep working (no regression).
+        (f.join("src/main.ts"),       "@/components/HelloWorld.vue", hello),
+        (f.join("src/main.ts"),       "@/util.ts",                   f.join("src/util.ts")),
+    ];
+
+    for (path, request, expected) in pass {
+        let resolved_path = resolver.resolve_file(&path, request).map(|f| f.full_path());
+        assert_eq!(resolved_path, Ok(expected), "{request} from {path:?}");
+    }
+
+    // The referenced project owns the `.vue` / `.svelte` / `.ts` files through
+    // its `include` globs, so auto-discovery selects it for those importers...
+    for importer in ["src/App.vue", "src/Widget.svelte", "src/main.ts"] {
+        let tsconfig = resolver.find_tsconfig(f.join(importer)).unwrap().unwrap();
+        assert_eq!(tsconfig.path, f.join("tsconfig.app.json"), "find_tsconfig for {importer}");
+    }
+
+    // ...while a file whose extension is not matched by any `include` glob
+    // (here `.css`) is owned by no project. Discovery finds no config for it (it
+    // would land in an inferred project), so the `@/*` alias — declared only by
+    // the referenced project — does not leak into it.
+    assert!(resolver.find_tsconfig(f.join("src/styles.css")).unwrap().is_none());
+
+    // And so the `@/*` alias (declared only by the referenced project) does not
+    // apply to the `.css` file.
+    let leaked = resolver
+        .resolve_file(f.join("src/styles.css"), "@/components/HelloWorld.vue")
+        .map(|f| f.full_path());
+    assert_eq!(leaked, Err(ResolveError::NotFound("@/components/HelloWorld.vue".into())));
+}
+
+/// A nearer child `tsconfig.json` whose `include` does not cover a non-TS
+/// importer must not intercept it; auto-discovery walks past it to an ancestor
+/// solution project that genuinely includes the file.
+///
+/// `src/feature/tsconfig.json` only includes `**/*.ts`, so it does not own
+/// `src/feature/App.vue`. The solution root references a project that includes
+/// `src/**/*.vue` and owns the `@/*` alias, so the `.vue` importer must resolve
+/// through it.
+///
+/// Previously `claims_ownership_of` returned `true` for *every* non-TS importer
+/// (a blanket "use the nearest tsconfig" shortcut). The child therefore claimed
+/// `App.vue` and the walk stopped there, so `@/*` — which the child does not
+/// declare — never resolved.
+#[test]
+fn solution_style_nested_non_ts_walks_up() {
+    let f = super::fixture_root().join("tsconfig/cases/solution-style-non-ts");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into(), ".vue".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let importer = f.join("src/feature/App.vue");
+
+    // The `.vue` importer resolves the solution project's `@/*` alias.
+    let resolved_path =
+        resolver.resolve_file(&importer, "@/components/HelloWorld.vue").map(|f| f.full_path());
+    assert_eq!(resolved_path, Ok(f.join("src/components/HelloWorld.vue")));
+
+    // Auto-discovery routes the importer to the referenced project that owns
+    // `@/*`, not the nearer child `tsconfig.json` (which does not cover it).
+    let tsconfig = resolver.find_tsconfig(&importer).unwrap().unwrap();
+    assert_eq!(tsconfig.path, f.join("tsconfig.app.json"));
+
+    // A `.ts` file the child *does* include stays owned by the child — the walk
+    // only continues for files the nearer config does not cover.
+    let local = resolver.find_tsconfig(f.join("src/feature/local.ts")).unwrap().unwrap();
+    assert_eq!(local.path, f.join("src/feature/tsconfig.json"));
+
+    // A `.js` file with `allowJs` off is not part of the child's program, so
+    // the child does not own it and — like the `.vue` above — the walk
+    // continues up. No ancestor owns a bare `.js` either, so discovery finds no
+    // config for it (it would land in an inferred project).
+    assert!(resolver.find_tsconfig(f.join("src/feature/legacy.js")).unwrap().is_none());
+}

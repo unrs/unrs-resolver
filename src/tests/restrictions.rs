@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use fancy_regex::Regex;
+use regress::Regex;
 
 use crate::{ResolveError, ResolveOptions, Resolver, Restriction};
 
@@ -14,7 +14,7 @@ fn should_respect_regexp_restriction() {
     let resolver1 = Resolver::new(ResolveOptions {
         extensions: vec![".js".into()],
         restrictions: vec![Restriction::Fn(Arc::new(move |path| {
-            path.as_os_str().to_str().is_some_and(|s| re.is_match(s).unwrap_or(false))
+            path.as_os_str().to_str().is_some_and(|s| re.find(s).is_some())
         }))],
         ..ResolveOptions::default()
     });
@@ -32,7 +32,7 @@ fn should_try_to_find_alternative_1() {
         extensions: vec![".js".into(), ".css".into()],
         main_files: vec!["index".into()],
         restrictions: vec![Restriction::Fn(Arc::new(move |path| {
-            path.as_os_str().to_str().is_some_and(|s| re.is_match(s).unwrap_or(false))
+            path.as_os_str().to_str().is_some_and(|s| re.find(s).is_some())
         }))],
         ..ResolveOptions::default()
     });
@@ -65,7 +65,7 @@ fn should_try_to_find_alternative_2() {
         extensions: vec![".js".into(), ".css".into()],
         main_fields: vec!["main".into(), "style".into()],
         restrictions: vec![Restriction::Fn(Arc::new(move |path| {
-            path.as_os_str().to_str().is_some_and(|s| re.is_match(s).unwrap_or(false))
+            path.as_os_str().to_str().is_some_and(|s| re.find(s).is_some())
         }))],
         ..ResolveOptions::default()
     });
@@ -83,7 +83,7 @@ fn should_try_to_find_alternative_3() {
         extensions: vec![".js".into()],
         main_fields: vec!["main".into(), "module".into(), "style".into()],
         restrictions: vec![Restriction::Fn(Arc::new(move |path| {
-            path.as_os_str().to_str().is_some_and(|s| re.is_match(s).unwrap_or(false))
+            path.as_os_str().to_str().is_some_and(|s| re.find(s).is_some())
         }))],
         ..ResolveOptions::default()
     });
@@ -103,7 +103,7 @@ fn should_check_restrictions_in_load_index_with_enforce_extension_disabled() {
         main_files: vec!["index".into()],
         enforce_extension: crate::EnforceExtension::Disabled,
         restrictions: vec![Restriction::Fn(Arc::new(move |path| {
-            path.as_os_str().to_str().is_some_and(|s| re.is_match(s).unwrap_or(false))
+            path.as_os_str().to_str().is_some_and(|s| re.find(s).is_some())
         }))],
         ..ResolveOptions::default()
     });
@@ -130,7 +130,7 @@ fn should_check_restrictions_in_load_alias_or_file() {
 
     // Direct file access should fail due to restriction
     let resolution = resolver.resolve(&f, "./node_modules/pck1/index.js");
-    assert!(resolution.is_err());
+    resolution.unwrap_err();
 }
 
 // Test coverage for check_restrictions at line 1148 in browser field/alias resolution
@@ -149,7 +149,7 @@ fn should_check_restrictions_in_browser_field_alias() {
 
     // Should fail to resolve due to restriction on browser field
     let resolution = resolver.resolve(&f, "./lib/self.js");
-    assert!(resolution.is_err());
+    resolution.unwrap_err();
 }
 
 // Test coverage for check_restrictions at line 1326 in load_extension_alias()
@@ -206,11 +206,11 @@ fn should_apply_multiple_restrictions() {
         main_files: vec!["index".into()],
         restrictions: vec![
             Restriction::Fn(Arc::new(move |path| {
-                path.as_os_str().to_str().is_some_and(|s| re_css.is_match(s).unwrap_or(false))
+                path.as_os_str().to_str().is_some_and(|s| re_css.find(s).is_some())
             })),
             Restriction::Fn(Arc::new(move |path| {
                 // Reject .js files
-                path.as_os_str().to_str().is_some_and(|s| !re_no_js.is_match(s).unwrap_or(false))
+                path.as_os_str().to_str().is_some_and(|s| re_no_js.find(s).is_none())
             })),
         ],
         ..ResolveOptions::default()
@@ -235,11 +235,11 @@ fn should_fail_if_any_restriction_fails() {
         restrictions: vec![
             Restriction::Fn(Arc::new(move |path| {
                 // First restriction: must be CSS
-                path.as_os_str().to_str().is_some_and(|s| re_css.is_match(s).unwrap_or(false))
+                path.as_os_str().to_str().is_some_and(|s| re_css.find(s).is_some())
             })),
             Restriction::Fn(Arc::new(move |path| {
                 // Second restriction: must NOT be CSS (contradicts first)
-                path.as_os_str().to_str().is_some_and(|s| !re_no_css.is_match(s).unwrap_or(false))
+                path.as_os_str().to_str().is_some_and(|s| re_no_css.find(s).is_none())
             })),
         ],
         ..ResolveOptions::default()

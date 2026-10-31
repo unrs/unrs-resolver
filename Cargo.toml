@@ -12,7 +12,7 @@ keywords = ["node", "resolve", "cjs", "esm", "enhanced-resolve"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/unrs/unrs-resolver"
-rust-version = "1.88.0"
+rust-version = "1.95.0"
 description = "ESM / CJS module resolution"
 
 [workspace.dependencies]
@@ -25,7 +25,7 @@ authors.workspace = true
 categories.workspace = true
 edition.workspace = true
 homepage.workspace = true
-include.workspace = true
+include = ["src/**/*", "README.md", "!**/tests/**/*"]
 keywords.workspace = true
 license.workspace = true
 readme.workspace = true
@@ -35,6 +35,10 @@ description.workspace = true
 
 [[bench]]
 name = "resolver"
+harness = false
+
+[[bench]]
+name = "package_managers"
 harness = false
 
 [lints.clippy]
@@ -51,17 +55,33 @@ unimplemented = "warn"
 clone_on_ref_ptr = "warn"
 # These two are mutually exclusive, I like `mod.rs` files for better fuzzy searches on module entries.
 self_named_module_files = "warn" # "-Wclippy::mod_module_files"
+# Use `#[expect(...)]` with a `reason` instead of `#[allow(...)]`, so silenced lints
+# are documented and stale suppressions become errors.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+assertions_on_result_states = "warn"
+cfg_not_test = "warn"
 empty_drop = "warn"
 empty_structs_with_brackets = "warn"
 exit = "warn"
 filetype_is_file = "warn"
+format_push_string = "warn"
 get_unwrap = "warn"
 impl_trait_in_params = "warn"
+infinite_loop = "warn"
+multiple_unsafe_ops_per_block = "warn"
+mutex_atomic = "warn"
+pathbuf_init_then_push = "warn"
 rc_buffer = "warn"
 rc_mutex = "warn"
+renamed_function_params = "warn"
 rest_pat_in_fully_bound_structs = "warn"
+return_and_then = "warn"
 unnecessary_safety_comment = "warn"
+unnecessary_self_imports = "warn"
+unused_result_ok = "warn"
 undocumented_unsafe_blocks = "warn"
+verbose_file_reads = "warn"
 too_many_arguments = "allow"
 pedantic = { level = "warn", priority = -1 }
 # This rule is too pedantic, I don't want to force this because naming things are hard.
@@ -77,14 +97,14 @@ missing_const_for_fn = "allow"
 name = "dir"
 
 [dependencies]
-cfg-if = "1"
-compact_str = "0.9"
+compact_str = "0.10"
 fast-glob = "1"
 indexmap = { version = "2", features = ["serde"] }
 json-strip-comments = "3.1"
+memchr = "2"
 nodejs-built-in-modules = "1.0.0"
 once_cell = "1" # Use `std::sync::OnceLock::get_or_try_init` when it is stable.
-papaya = "0.2"
+dashmap = { version = "6.2.1", features = ["raw-api"] }
 rustc-hash = { version = "2" }
 serde = { version = "1", features = ["derive"] } # derive for Deserialize from package.json
 serde_json = { version = "1", features = [
@@ -95,7 +115,7 @@ thiserror = "2"
 tracing = "0.1"
 
 percent-encoding = "2"
-pnp = { version = "0.12.8", optional = true }
+pnp = { version = "0.12.12", optional = true }
 
 document-features = { version = "0.2.12", optional = true }
 
@@ -107,15 +127,15 @@ windows = { version = "0.62.2", features = ["Win32_Storage_FileSystem"] }
 
 [target.'cfg(target_endian = "little")'.dependencies]
 # simd-json only works on little-endian systems
-simd-json = { version = "0.17.0", default-features = false, features = ["runtime-detection"] }
+simd-json = { version = "0.18.0", default-features = false, features = ["runtime-detection"] }
 self_cell = "1" # Used by simd implementation for self-referential struct
 
 [dev-dependencies]
 criterion2 = { version = "3.0.3", default-features = false }
-dirs = { version = "6.0.0" }
-fancy-regex = { version = "^0.18.0", default-features = false, features = ["std"] }
+dirs = { version = "7.0.0" }
 pico-args = "0.5.0"
 rayon = { version = "1.12.0" }
+regress = { version = "0.12" } # ECMAScript regex engine for testing `Restriction::Fn`
 vfs = "0.13.0" # for testing with in memory file system
 walkdir = "2" # for loading benchmark fixtures
 
@@ -132,6 +152,9 @@ codspeed = ["criterion2/codspeed"]
 [profile.dev]
 # Disabling debug info speeds up local and CI builds,
 # and we don't rely on it for debugging that much.
+debug = false
+
+[profile.dev.package."*"]
 debug = false
 
 [profile.test]
@@ -158,9 +181,3 @@ codegen-units = 1
 strip = "symbols" # set to `false` for debug information
 debug = false # set to `true` for debug information
 panic = "abort" # Let it crash and force ourselves to write safe Rust.
-
-[profile.release.package.regex-automata]
-opt-level = "z" # Optimize for size.
-
-[profile.release.package.regex-syntax]
-opt-level = "z" # Optimize for size.

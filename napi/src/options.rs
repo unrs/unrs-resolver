@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use fancy_regex::Regex;
 use napi::Either;
 use napi_derive::napi;
+use regress::Regex;
 
 /// Module Resolution Options
 ///
@@ -180,20 +180,6 @@ pub enum EnforceExtension {
     Disabled,
 }
 
-impl EnforceExtension {
-    pub fn is_auto(&self) -> bool {
-        *self == Self::Auto
-    }
-
-    pub fn is_enabled(&self) -> bool {
-        *self == Self::Enabled
-    }
-
-    pub fn is_disabled(&self) -> bool {
-        *self == Self::Disabled
-    }
-}
-
 /// Alias Value for [ResolveOptions::alias] and [ResolveOptions::fallback].
 /// Use struct because napi don't support structured union now
 #[napi(object)]
@@ -232,7 +218,7 @@ impl TryFrom<Restriction> for unrs_resolver::Restriction {
                 let re = Regex::new(&regex)
                     .map_err(|e| napi::Error::from_reason(format!("Invalid regex: {e}")))?;
                 Ok(unrs_resolver::Restriction::Fn(Arc::new(move |path| {
-                    re.is_match(path.to_str().unwrap_or_default()).unwrap_or(false)
+                    re.find(path.to_str().unwrap_or_default()).is_some()
                 })))
             }
             (Some(path), None) => Ok(unrs_resolver::Restriction::Path(PathBuf::from(path))),

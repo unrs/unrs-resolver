@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    cfg_select,
     collections::HashSet as StdHashSet,
     hash::{BuildHasherDefault, Hash, Hasher},
     io,
@@ -7,41 +8,51 @@ use std::{
     sync::Arc,
 };
 
-use cfg_if::cfg_if;
+use dashmap::{DashMap, mapref::entry::Entry};
 #[cfg(feature = "yarn_pnp")]
 use once_cell::sync::OnceCell;
-use papaya::{HashMap, HashSet};
 use rustc_hash::FxHasher;
 
-use super::borrowed_path::BorrowedCachedPath;
-use super::cached_path::{CachedPath, CachedPathImpl};
-use super::hasher::IdentityHasher;
+use super::{
+    cached_path::{CachedPath, CachedPathImpl},
+    hasher::IdentityHasher,
+};
 use crate::{
-    FileSystem, PackageJson, ResolveError, ResolveOptions, TsConfig,
-    context::ResolveContext as Ctx, path::PathUtil,
+    FileMetadata, FileSystem, PackageJson, ResolveError, ResolveOptions, TsConfig,
+    context::ResolveContext as Ctx, package_map::PackageMapCache, path::PathUtil,
 };
 
 /// Cache implementation used for caching filesystem access.
-#[derive(Default)]
-pub struct Cache<Fs> {
-    pub(crate) fs: Fs,
-    pub(crate) paths: HashSet<CachedPath, BuildHasherDefault<IdentityHasher>>,
+pub struct Cache {
+    pub(crate) fs: Arc<dyn FileSystem>,
+    pub(crate) paths: DashMap<CachedPath, (), BuildHasherDefault<IdentityHasher>>,
     /// Cache for raw/unbuilt tsconfigs (used when extending).
-    pub(crate) tsconfigs_raw: HashMap<PathBuf, Arc<TsConfig>, BuildHasherDefault<FxHasher>>,
+    pub(crate) tsconfigs_raw: DashMap<PathBuf, Arc<TsConfig>, BuildHasherDefault<FxHasher>>,
     /// Cache for built/resolved tsconfigs (used for resolution).
-    pub(crate) tsconfigs_built: HashMap<PathBuf, Arc<TsConfig>, BuildHasherDefault<FxHasher>>,
+    pub(crate) tsconfigs_built: DashMap<PathBuf, Arc<TsConfig>, BuildHasherDefault<FxHasher>>,
     #[cfg(feature = "yarn_pnp")]
     pub(crate) yarn_pnp_manifest: OnceCell<pnp::Manifest>,
+    pub(crate) package_map: Box<PackageMapCache>,
 }
 
-impl<Fs: FileSystem> Cache<Fs> {
+impl Cache {
     pub fn clear(&self) {
-        self.paths.pin().clear();
-        self.tsconfigs_raw.pin().clear();
-        self.tsconfigs_built.pin().clear();
+        self.paths.clear();
+        self.tsconfigs_raw.clear();
+        self.tsconfigs_built.clear();
+        self.package_map.clear();
     }
 
-    #[allow(clippy::cast_possible_truncation)]
+    /// The underlying filesystem as a trait object.
+    #[inline]
+    fn fs(&self) -> &dyn FileSystem {
+        &*self.fs
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "shard selection needs only the low bits of the hash"
+    )]
     pub(crate) fn value(&self, path: &Path) -> CachedPath {
         // `Path::hash` is slow: https://doc.rust-lang.org/std/path/struct.Path.html#impl-Hash-for-Path
         // `path.as_os_str()` hash is not stable because we may joined a path like `foo/bar` and `foo\\bar` on windows.
@@ -50,12 +61,20 @@ impl<Fs: FileSystem> Cache<Fs> {
             path.as_os_str().hash(&mut hasher);
             hasher.finish()
         };
-        let paths = self.paths.pin();
-        if let Some(entry) = paths.get(&BorrowedCachedPath { hash, path }) {
-            return entry.clone();
+        // Look up by the memoized `hash`. `IdentityHasher` only accepts a single `write_u64`, so the
+        // set can't be probed by a borrowed `&Path` through dashmap's `Borrow`-based `get`; instead
+        // read the shard directly (raw-api) with the precomputed hash and an `OsStr` equality. This
+        // mirrors the `Equivalent` lookup the original `papaya` set used, and keeps it zero-alloc.
+        {
+            let shard = self.paths.shards()[self.paths.determine_shard(hash as usize)].read();
+            if let Some((cached, _)) =
+                shard.get(hash, |(k, _)| k.path().as_os_str() == path.as_os_str())
+            {
+                return cached.clone();
+            }
         }
         let parent = path.parent().map(|p| self.value(p));
-        let is_node_modules = path.file_name().as_ref().is_some_and(|&name| name == "node_modules");
+        let is_node_modules = path.file_name().is_some_and(|name| name == "node_modules");
         let inside_node_modules =
             is_node_modules || parent.as_ref().is_some_and(|parent| parent.inside_node_modules);
         let parent_weak = parent.as_ref().map(|p| Arc::downgrade(&p.0));
@@ -66,24 +85,30 @@ impl<Fs: FileSystem> Cache<Fs> {
             inside_node_modules,
             parent_weak,
         )));
-        paths.insert(cached_path.clone());
-        cached_path
+        // The shard guard above is dropped before the parent recursion, so a concurrent call may
+        // have inserted this same path in the meantime. Dedup via the entry API so every path keeps
+        // a single shared `Arc`, which the `canonicalized` / `node_modules` weak-pointer caches rely
+        // on for identity.
+        match self.paths.entry(cached_path.clone()) {
+            Entry::Occupied(occupied) => occupied.key().clone(),
+            Entry::Vacant(vacant) => {
+                vacant.insert(());
+                cached_path
+            }
+        }
     }
 
     pub(crate) fn canonicalize(&self, path: &CachedPath) -> Result<PathBuf, ResolveError> {
         let cached_path = self.canonicalize_impl(path)?;
         let path = cached_path.to_path_buf();
-        cfg_if! {
-            if #[cfg(target_os = "windows")] {
-                crate::windows::strip_windows_prefix(path)
-            } else {
-                Ok(path)
-            }
+        cfg_select! {
+            target_os = "windows" => crate::windows::strip_windows_prefix(path),
+            _ => Ok(path),
         }
     }
 
-    pub(crate) fn is_file(&self, path: &CachedPath, ctx: &mut Ctx) -> bool {
-        if path.is_file(&self.fs).is_some_and(|b| b) {
+    pub(crate) fn is_file(&self, path: &CachedPath, symlinks: bool, ctx: &mut Ctx) -> bool {
+        if self.followed_metadata(path, symlinks).is_some_and(FileMetadata::is_file) {
             ctx.add_file_dependency(path.path());
             true
         } else {
@@ -92,10 +117,39 @@ impl<Fs: FileSystem> Cache<Fs> {
         }
     }
 
-    pub(crate) fn is_dir(&self, path: &CachedPath, ctx: &mut Ctx) -> bool {
-        path.is_dir(&self.fs).unwrap_or_else(|| {
-            ctx.add_missing_dependency(path.path());
-            false
+    pub(crate) fn is_dir(&self, path: &CachedPath, symlinks: bool, ctx: &mut Ctx) -> bool {
+        self.followed_metadata(path, symlinks).map_or_else(
+            || {
+                ctx.add_missing_dependency(path.path());
+                false
+            },
+            FileMetadata::is_dir,
+        )
+    }
+
+    /// `stat`-equivalent metadata (symlinks followed) for `path`, cached in the `followed` slot.
+    ///
+    /// For a non-symlink the cached `lstat` already answers this, so no extra syscall is issued.
+    /// For a symlink with `symlinks` enabled, reuse canonicalization — which the resolver performs
+    /// anyway for the final resolved path — and read the canonical target's already-cached `lstat`,
+    /// avoiding a standalone `stat` of the symlink.
+    ///
+    /// Falls back to a direct `stat` when symlinks are disabled, when canonicalization fails, or
+    /// when the canonical target has no metadata. The last case keeps the optimization purely
+    /// additive: a custom [`FileSystem`] whose `canonicalize` and `metadata` disagree still gets
+    /// the same answer `stat` gave before.
+    fn followed_metadata(&self, path: &CachedPath, symlinks: bool) -> Option<FileMetadata> {
+        path.meta.followed_or_init(|| match path.link_metadata(self.fs()) {
+            Some(meta) if meta.is_symlink() => {
+                let followed = if symlinks {
+                    self.canonicalize_impl(path).ok().and_then(|c| c.link_metadata(self.fs()))
+                } else {
+                    None
+                };
+                followed.or_else(|| self.fs.metadata(path.path()).ok())
+            }
+            // A non-symlink's `lstat` already is its `stat`; `None` stays `None`.
+            other => other,
         })
     }
 
@@ -133,7 +187,7 @@ impl<Fs: FileSystem> Cache<Fs> {
     ) -> Result<Option<Arc<PackageJson>>, ResolveError> {
         let mut path = path.clone();
         // Go up directories when the querying path is not a directory
-        while !self.is_dir(&path, ctx) {
+        while !self.is_dir(&path, options.symlinks, ctx) {
             if let Some(cv) = path.parent(self) {
                 path = cv;
             } else {
@@ -171,23 +225,28 @@ impl<Fs: FileSystem> Cache<Fs> {
                 } else {
                     package_json_path.clone()
                 };
-                PackageJson::parse(
-                    &self.fs,
-                    package_json_path.clone(),
+                // Move `package_json_path` into `parse` instead of cloning it: the parsed
+                // `PackageJson` stores the path verbatim (`package_json.path()`), and on error
+                // `JSONError.path` carries the same path, so the file-dependency record reads it
+                // back without a second allocation.
+                // https://github.com/webpack/enhanced-resolve/blob/58464fc7cb56673c9aa849e68e6300239601e615/lib/DescriptionFileUtils.js#L68-L82
+                match PackageJson::parse(
+                    self.fs(),
+                    package_json_path,
                     real_path,
                     package_json_bytes,
-                )
-                .map(|package_json| Some(Arc::new(package_json)))
-                .map_err(ResolveError::Json)
-                // https://github.com/webpack/enhanced-resolve/blob/58464fc7cb56673c9aa849e68e6300239601e615/lib/DescriptionFileUtils.js#L68-L82
-                .inspect(|_| {
-                    ctx.add_file_dependency(&package_json_path);
-                })
-                .inspect_err(|_| {
-                    if let Some(deps) = &mut ctx.file_dependencies {
-                        deps.push(package_json_path.clone());
+                ) {
+                    Ok(package_json) => {
+                        ctx.add_file_dependency(package_json.path());
+                        Ok(Some(Arc::new(package_json)))
                     }
-                })
+                    Err(error) => {
+                        if let Some(deps) = &mut ctx.file_dependencies {
+                            deps.push(error.path.clone());
+                        }
+                        Err(ResolveError::Json(error))
+                    }
+                }
             })
             .cloned()
     }
@@ -199,24 +258,26 @@ impl<Fs: FileSystem> Cache<Fs> {
         callback: F, // callback for modifying tsconfig with `extends`
     ) -> Result<Arc<TsConfig>, ResolveError> {
         // For root=true (caller tsconfig), check built cache first
-        if root {
-            let tsconfigs_built = self.tsconfigs_built.pin();
-            if let Some(tsconfig) = tsconfigs_built.get(path) {
-                return Ok(Arc::clone(tsconfig));
-            }
+        if root && let Some(tsconfig) = self.tsconfigs_built.get(path) {
+            return Ok(Arc::clone(tsconfig.value()));
         }
 
         // Check raw cache (callback applied, not built) - only for root=false
         // For root=true, we need to run the callback to ensure extends are processed
-        if !root {
-            let tsconfigs_raw = self.tsconfigs_raw.pin();
-            if let Some(tsconfig) = tsconfigs_raw.get(path) {
-                return Ok(Arc::clone(tsconfig));
-            }
+        if !root && let Some(tsconfig) = self.tsconfigs_raw.get(path) {
+            return Ok(Arc::clone(tsconfig.value()));
         }
 
-        // Not in any cache, parse from file
-        let meta = self.fs.metadata(path).ok();
+        // Not in any cache, parse from file.
+        // Classify file/dir via the cached `lstat` (which the canonicalization below reuses)
+        // instead of a standalone `stat`. For a regular file/dir the two agree; only follow the
+        // link with a `stat` when `path` is actually a symlink, preserving the symlink-following
+        // classification while saving one metadata syscall per tsconfig in the common case.
+        let cached_path = self.value(path);
+        let meta = match cached_path.link_metadata(self.fs()) {
+            Some(m) if m.is_symlink() => self.fs.metadata(path).ok(),
+            other => other,
+        };
         let tsconfig_path = if meta.is_some_and(|m| m.is_file) {
             Cow::Borrowed(path)
         } else if meta.is_some_and(|m| m.is_dir) {
@@ -230,12 +291,22 @@ impl<Fs: FileSystem> Cache<Fs> {
             if err.kind() == io::ErrorKind::NotFound {
                 ResolveError::TsconfigNotFound(path.to_path_buf())
             } else {
-                ResolveError::from(err)
+                ResolveError::TsconfigLoadFailed {
+                    path: tsconfig_path.to_path_buf(),
+                    source: Box::new(ResolveError::from(err)),
+                }
             }
         })?;
-        let mut tsconfig =
-            TsConfig::parse(root, &tsconfig_path, tsconfig_string).map_err(|error| {
-                ResolveError::from_serde_json_error(tsconfig_path.to_path_buf(), &error)
+        let canonical_path = self
+            .canonicalize(&self.value(&tsconfig_path))
+            .unwrap_or_else(|_| tsconfig_path.to_path_buf());
+        let mut tsconfig = TsConfig::parse(root, &tsconfig_path, &canonical_path, tsconfig_string)
+            .map_err(|error| ResolveError::TsconfigLoadFailed {
+                path: tsconfig_path.to_path_buf(),
+                source: Box::new(ResolveError::from_serde_json_error(
+                    tsconfig_path.to_path_buf(),
+                    &error,
+                )),
             })?;
 
         // Run callback (extends/references processing)
@@ -243,18 +314,18 @@ impl<Fs: FileSystem> Cache<Fs> {
 
         // Cache raw version (callback applied, not built)
         tsconfig.set_should_build(false);
-        let raw_tsconfig = Arc::new(tsconfig.clone());
-        self.tsconfigs_raw.pin().insert(path.to_path_buf(), Arc::clone(&raw_tsconfig));
-
         if root {
+            self.tsconfigs_raw.insert(path.to_path_buf(), Arc::new(tsconfig.clone()));
             // Build and cache built version
             tsconfig.set_should_build(true);
             let tsconfig = Arc::new(tsconfig.build());
-            self.tsconfigs_built.pin().insert(path.to_path_buf(), Arc::clone(&tsconfig));
+            self.tsconfigs_built.insert(path.to_path_buf(), Arc::clone(&tsconfig));
             Ok(tsconfig)
         } else {
             // Return unbuilt version
-            Ok(raw_tsconfig)
+            let tsconfig = Arc::new(tsconfig);
+            self.tsconfigs_raw.insert(path.to_path_buf(), Arc::clone(&tsconfig));
+            Ok(tsconfig)
         }
     }
 
@@ -285,24 +356,16 @@ impl<Fs: FileSystem> Cache<Fs> {
     }
 }
 
-impl<Fs: FileSystem> Cache<Fs> {
-    pub fn new(fs: Fs) -> Self {
+impl Cache {
+    pub fn new(fs: Arc<dyn FileSystem>) -> Self {
         Self {
             fs,
-            paths: HashSet::builder()
-                .hasher(BuildHasherDefault::default())
-                .resize_mode(papaya::ResizeMode::Blocking)
-                .build(),
-            tsconfigs_raw: HashMap::builder()
-                .hasher(BuildHasherDefault::default())
-                .resize_mode(papaya::ResizeMode::Blocking)
-                .build(),
-            tsconfigs_built: HashMap::builder()
-                .hasher(BuildHasherDefault::default())
-                .resize_mode(papaya::ResizeMode::Blocking)
-                .build(),
+            paths: DashMap::with_hasher(BuildHasherDefault::default()),
+            tsconfigs_raw: DashMap::with_hasher(BuildHasherDefault::default()),
+            tsconfigs_built: DashMap::with_hasher(BuildHasherDefault::default()),
             #[cfg(feature = "yarn_pnp")]
             yarn_pnp_manifest: OnceCell::new(),
+            package_map: Box::default(),
         }
     }
 
@@ -331,13 +394,13 @@ impl<Fs: FileSystem> Cache<Fs> {
         visited: &mut StdHashSet<u64, BuildHasherDefault<IdentityHasher>>,
     ) -> Result<CachedPath, ResolveError> {
         // Check cache first - if this path was already canonicalized, return the cached result
-        if let Some((weak, path_buf)) = path.canonicalized.get() {
+        if let Some((weak, path_box)) = path.canonicalized.get() {
             return weak
                 .upgrade()
                 .map(CachedPath)
                 .or_else(|| {
-                    // Weak pointer upgrade failed - recreate from stored PathBuf
-                    Some(self.value(path_buf))
+                    // Weak pointer upgrade failed - recreate from the stored canonical path
+                    Some(self.value(path_box))
                 })
                 .ok_or_else(|| {
                     io::Error::new(io::ErrorKind::NotFound, "Cached path no longer exists").into()
@@ -352,40 +415,60 @@ impl<Fs: FileSystem> Cache<Fs> {
         let res = path.parent(self).map_or_else(
             || Ok(path.normalize_root(self)),
             |parent| {
-                self.canonicalize_with_visited(&parent, visited).and_then(|parent_canonical| {
-                    let normalized = parent_canonical
-                        .normalize_with(path.path().strip_prefix(parent.path()).unwrap(), self);
+                let parent_canonical = self.canonicalize_with_visited(&parent, visited)?;
+                // When no ancestor is a symlink — the common case — the parent
+                // canonicalizes to itself, so `parent_canonical` is `parent`'s own interned
+                // Arc and the rebuild below would just re-derive `path`'s existing key.
+                // Skip it (the strip_prefix, scratch-buffer copy, hash, and shard probe)
+                // and return this entry directly. That is only sound when the key is
+                // spelled exactly `<parent><MAIN_SEPARATOR><file_name>`: spellings the
+                // rebuild would fold — `.`/`..` tails, trailing or doubled separators, a
+                // `/` joint on Windows — fail the shape check and rebuild as before. The
+                // byte before the joint must be a non-separator because a root parent
+                // already ends with the separator (the rebuild appends none), so with
+                // `//x` or `C:\\x` the `+ 1` would count the doubled separator itself.
+                // Wasm always rebuilds: component normalization trims uvwasi's trailing
+                // NULs, which reuse would keep.
+                let path_bytes = path.path().as_os_str().as_encoded_bytes();
+                let parent_len = parent.path().as_os_str().len();
+                let normalized = if cfg!(not(target_family = "wasm"))
+                    && Arc::ptr_eq(&parent_canonical.0, &parent.0)
+                    && path.path().file_name().is_some_and(|name| {
+                        parent_len + 1 + name.len() == path_bytes.len()
+                            && path_bytes[parent_len] == std::path::MAIN_SEPARATOR as u8
+                            && path_bytes[parent_len - 1] != std::path::MAIN_SEPARATOR as u8
+                    }) {
+                    path.clone()
+                } else {
+                    parent_canonical
+                        .normalize_with(path.path().strip_prefix(parent.path()).unwrap(), self)
+                };
 
-                    if self.fs.symlink_metadata(path.path()).is_ok_and(|m| m.is_symlink) {
-                        let link = self.fs.read_link(normalized.path())?;
-                        if link.is_absolute() {
-                            return self.canonicalize_with_visited(
-                                &self.value(&link.normalize()),
-                                visited,
-                            );
-                        } else if let Some(dir) = normalized.parent(self) {
-                            // Symlink is relative `../../foo.js`, use the path directory
-                            // to resolve this symlink.
-                            return self.canonicalize_with_visited(
-                                &dir.normalize_with(&link, self),
-                                visited,
-                            );
-                        }
-                        debug_assert!(
-                            false,
-                            "Failed to get path parent for {}.",
-                            normalized.path().display()
-                        );
+                if path.link_metadata(self.fs()).is_some_and(|m| m.is_symlink) {
+                    let link = self.fs.read_link(normalized.path())?;
+                    if link.is_absolute() {
+                        return self
+                            .canonicalize_with_visited(&self.value(&link.normalize()), visited);
+                    } else if let Some(dir) = normalized.parent(self) {
+                        // Symlink is relative `../../foo.js`, use the path directory
+                        // to resolve this symlink.
+                        return self
+                            .canonicalize_with_visited(&dir.normalize_with(&link, self), visited);
                     }
+                    debug_assert!(
+                        false,
+                        "Failed to get path parent for {}.",
+                        normalized.path().display()
+                    );
+                }
 
-                    Ok(normalized)
-                })
+                Ok(normalized)
             },
         )?;
 
         // Cache the result before removing from visited set
         // This ensures parent canonicalization results are cached and reused
-        let _ = path.canonicalized.set((Arc::downgrade(&res.0), res.to_path_buf()));
+        let _ = path.canonicalized.set((Arc::downgrade(&res.0), res.0.path.clone()));
 
         // Remove from visited set when unwinding the recursion
         visited.remove(&path.hash);

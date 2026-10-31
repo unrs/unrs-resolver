@@ -25,20 +25,27 @@ jobs:
     steps:
       - uses: taiki-e/checkout-action@7d1e50e93dc4fb3bba58f85018fadf77898aee8b # v1.4.2
 
-      - uses: oxc-project/setup-rust@23f38cfb0c04af97a055f76acee94d5be71c7c82 # v1.0.16
+      - uses: oxc-project/setup-rust@3d6fb132fbe7cdcb66bf8ec193911c2945369d12 # v1.0.17
         with:
           cache-key: benchmark
           save-cache: ${{ github.ref_name == 'main' }}
-          tools: cargo-codspeed
+          tools: cargo-codspeed,just
 
       - uses: ./.github/actions/pnpm
 
-      - run: cargo codspeed build --features codspeed
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+
+      - name: Install bench-pm fixtures
+        run: just install-bench-fixtures
+
+      - run: cargo codspeed build --features codspeed,yarn_pnp
         env:
           RUSTFLAGS: "-C debuginfo=1 -C strip=none"
 
-      - uses: CodSpeedHQ/action@3194d9a39c4d46684cb44bf7207fc56626aad8fd # v4.15.1
+      - uses: CodSpeedHQ/action@c4fd08a3a159bd0cc208da1e0edf32b8c47d75e5 # v5.4.0
         timeout-minutes: 30
         with:
+          mode: simulation
           run: cargo codspeed run
-          mode: instrumentation

@@ -5,10 +5,9 @@ use std::{
 };
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use memory_fs::BenchMemoryFS;
 use rayon::prelude::*;
 use unrs_resolver::{FileSystem as FileSystemTrait, FileSystemOs, PackageJson};
-
-use memory_fs::BenchMemoryFS;
 
 fn data() -> Vec<(PathBuf, &'static str)> {
     let cwd = env::current_dir().unwrap();
@@ -157,7 +156,16 @@ fn unrs_resolver_real() -> unrs_resolver::Resolver {
     Resolver::new(resolve_options())
 }
 
+/// Pin rayon's global pool to a fixed thread count so the `multi-thread` benches are deterministic.
+/// Rayon otherwise sizes the pool to the host core count, which varies across CI runners and makes
+/// CodSpeed's instrumented instruction count flaky. Idempotent: the first call wins, the rest are
+/// no-ops, so it's safe to call from every parallel bench regardless of run order or filtering.
+fn pin_rayon_threads() {
+    let _ = rayon::ThreadPoolBuilder::new().num_threads(4).build_global();
+}
+
 fn bench_resolver_memory(c: &mut Criterion) {
+    pin_rayon_threads();
     let data = data();
     let cwd = env::current_dir().unwrap();
     let symlink_test_dir = cwd.join("fixtures/enhanced-resolve/test/temp_symlinks");
@@ -171,13 +179,13 @@ fn bench_resolver_memory(c: &mut Criterion) {
         );
     }
 
-    let symlinks_range = 0u32..10000;
+    let symlink_specifiers = (0u32..10000).map(|i| format!("./file{i}")).collect::<Vec<_>>();
 
-    for i in symlinks_range.clone() {
-        assert!(
-            unrs_resolver_memory().resolve(&symlink_test_dir, &format!("./file{i}")).is_ok(),
-            "file{i}.js"
-        );
+    {
+        let unrs_resolver = unrs_resolver_memory();
+        for specifier in &symlink_specifiers {
+            assert!(unrs_resolver.resolve(&symlink_test_dir, specifier).is_ok(), "{specifier}");
+        }
     }
 
     let mut group = c.benchmark_group("resolver_memory");
@@ -211,15 +219,12 @@ fn bench_resolver_memory(c: &mut Criterion) {
 
     group.bench_with_input(
         BenchmarkId::from_parameter("resolve from symlinks"),
-        &symlinks_range,
-        |b, data| {
+        &symlink_specifiers,
+        |b, specifiers| {
             let unrs_resolver = unrs_resolver_memory();
             b.iter(|| {
-                for i in data.clone() {
-                    assert!(
-                        unrs_resolver.resolve(&symlink_test_dir, &format!("./file{i}")).is_ok(),
-                        "file{i}.js"
-                    );
+                for specifier in specifiers {
+                    _ = unrs_resolver.resolve(&symlink_test_dir, specifier);
                 }
             });
         },
@@ -240,6 +245,7 @@ fn bench_resolver_memory(c: &mut Criterion) {
 }
 
 fn bench_resolver_real(c: &mut Criterion) {
+    pin_rayon_threads();
     let data = data();
     let symlink_test_dir = create_symlinks().expect("Create symlink fixtures failed");
 
@@ -252,13 +258,13 @@ fn bench_resolver_real(c: &mut Criterion) {
         );
     }
 
-    let symlinks_range = 0u32..10000;
+    let symlink_specifiers = (0u32..10000).map(|i| format!("./file{i}")).collect::<Vec<_>>();
 
-    for i in symlinks_range.clone() {
-        assert!(
-            unrs_resolver_real().resolve(&symlink_test_dir, &format!("./file{i}")).is_ok(),
-            "file{i}.js"
-        );
+    {
+        let unrs_resolver = unrs_resolver_real();
+        for specifier in &symlink_specifiers {
+            assert!(unrs_resolver.resolve(&symlink_test_dir, specifier).is_ok(), "{specifier}");
+        }
     }
 
     let mut group = c.benchmark_group("resolver_real");
@@ -283,15 +289,12 @@ fn bench_resolver_real(c: &mut Criterion) {
 
     group.bench_with_input(
         BenchmarkId::from_parameter("resolve from symlinks"),
-        &symlinks_range,
-        |b, data| {
+        &symlink_specifiers,
+        |b, specifiers| {
             let unrs_resolver = unrs_resolver_real();
             b.iter(|| {
-                for i in data.clone() {
-                    assert!(
-                        unrs_resolver.resolve(&symlink_test_dir, &format!("./file{i}")).is_ok(),
-                        "file{i}.js"
-                    );
+                for specifier in specifiers {
+                    _ = unrs_resolver.resolve(&symlink_test_dir, specifier);
                 }
             });
         },
@@ -468,10 +471,10 @@ mod memory_fs {
     use std::{
         fs, io,
         path::{Path, PathBuf},
+        sync::LazyLock,
     };
 
     use rustc_hash::{FxHashMap, FxHashSet};
-    use std::sync::LazyLock;
     use unrs_resolver::{FileMetadata, FileSystem, ResolveError};
     use walkdir::WalkDir;
 

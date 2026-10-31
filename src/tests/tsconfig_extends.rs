@@ -39,6 +39,11 @@ fn test_extend_tsconfig() {
     assert_eq!(compiler_options.jsx_factory, Some("React.createElement".to_string()));
     assert_eq!(compiler_options.jsx_fragment_factory, Some("React.Fragment".to_string()));
     assert_eq!(compiler_options.jsx_import_source, Some("react".to_string()));
+
+    assert_eq!(compiler_options.out_dir, Some(f.join("dist")));
+    assert_eq!(compiler_options.declaration_dir, Some(f.join("types")));
+    assert_eq!(compiler_options.resolve_json_module, Some(true));
+    assert_eq!(compiler_options.check_js, Some(false));
 }
 
 #[test]
@@ -180,8 +185,9 @@ fn test_extend_tsconfig_no_override_existing() {
     })
     .to_string();
 
-    let parent_tsconfig = TsConfig::parse(true, parent_path, parent_config).unwrap().build();
-    let mut child_tsconfig = TsConfig::parse(true, child_path, child_config).unwrap();
+    let parent_tsconfig =
+        TsConfig::parse(true, parent_path, parent_path, parent_config).unwrap().build();
+    let mut child_tsconfig = TsConfig::parse(true, child_path, child_path, child_config).unwrap();
 
     // Perform the extension
     child_tsconfig.extend_tsconfig(&parent_tsconfig);
@@ -292,7 +298,8 @@ impl crate::FileSystem for UnreadableFs {
 }
 
 /// When a tsconfig's `extends` target exists but is not readable (e.g. permission denied),
-/// `resolve_tsconfig` should return an `IOError` (not silently skip it).
+/// `resolve_tsconfig` should return a `TsconfigLoadFailed` wrapping an `IOError`
+/// (not silently skip it).
 #[test]
 fn test_extend_tsconfig_unreadable_file() {
     use crate::ResolveError;
@@ -313,13 +320,17 @@ fn test_extend_tsconfig_unreadable_file() {
 
     let result = resolver.resolve_tsconfig(&f);
     assert!(
-        matches!(&result, Err(ResolveError::IOError(_))),
-        "expected IOError for unreadable extends target, got {result:?}",
+        matches!(
+            &result,
+            Err(ResolveError::TsconfigLoadFailed { source, .. })
+                if matches!(source.as_ref(), ResolveError::IOError(_))
+        ),
+        "expected TsconfigLoadFailed wrapping IOError for unreadable extends target, got {result:?}",
     );
 }
 
 /// When a tsconfig's `references` target exists but is not readable (e.g. permission denied),
-/// `resolve_tsconfig` should return an `IOError`.
+/// `resolve_tsconfig` should return a `TsconfigLoadFailed` wrapping an `IOError`.
 #[test]
 fn test_references_unreadable_file() {
     use crate::ResolveError;
@@ -340,8 +351,12 @@ fn test_references_unreadable_file() {
 
     let result = resolver.resolve_tsconfig(&f);
     assert!(
-        matches!(&result, Err(ResolveError::IOError(_))),
-        "expected IOError for unreadable references target, got {result:?}",
+        matches!(
+            &result,
+            Err(ResolveError::TsconfigLoadFailed { source, .. })
+                if matches!(source.as_ref(), ResolveError::IOError(_))
+        ),
+        "expected TsconfigLoadFailed wrapping IOError for unreadable references target, got {result:?}",
     );
 }
 
@@ -364,4 +379,61 @@ fn test_extend_package() {
         let compiler_options = &resolution.compiler_options;
         assert_eq!(compiler_options.target, Some("ES2020".to_string()));
     }
+}
+
+#[test]
+fn test_extend_imports() {
+    let f = super::fixture_root().join("tsconfig/cases/extends-imports");
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("tsconfig.json"),
+            references: TsconfigReferences::Auto,
+        })),
+        ..ResolveOptions::default()
+    });
+
+    let resolution = resolver.resolve_tsconfig(f.join("tsconfig-string.json")).expect("resolved");
+    assert_eq!(resolution.compiler_options.target, Some("ES2020".to_string()));
+
+    let resolution = resolver.resolve_tsconfig(&f).expect("resolved");
+    assert_eq!(resolution.compiler_options.target, Some("ES2015".to_string()));
+
+    let result = resolver.resolve_tsconfig(f.join("tsconfig-missing.json"));
+    assert!(
+        matches!(&result, Err(crate::ResolveError::TsconfigNotFound(_))),
+        "expected TsconfigNotFound for an undefined `#` import, got {result:?}",
+    );
+}
+
+fn assert_extends_symlink_resolves_to_canonical(config_file: &Path) {
+    let f = super::fixture_root().join("tsconfig/cases/extends-symlink");
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: config_file.to_path_buf(),
+            references: TsconfigReferences::Disabled,
+        })),
+        extensions: vec![".ts".into()],
+        ..ResolveOptions::default()
+    });
+
+    let path = resolver.resolve(f.join("project"), "@app/foo").unwrap().full_path();
+    assert_eq!(path, f.join("src/foo.ts"), "should resolve via canonical baseUrl, not symlink");
+
+    // The caller-supplied path is preserved as identity; `paths_base` is canonical.
+    let tsconfig = resolver.resolve_tsconfig(config_file).unwrap();
+    assert_eq!(tsconfig.path.as_path(), config_file);
+    assert_eq!(tsconfig.compiler_options.paths_base, f);
+}
+
+#[test]
+fn test_extend_tsconfig_via_symlink_package() {
+    let f = super::fixture_root().join("tsconfig/cases/extends-symlink");
+    assert_extends_symlink_resolves_to_canonical(&f.join("project/tsconfig.json"));
+}
+
+#[test]
+fn test_extend_tsconfig_via_symlink_relative() {
+    let f = super::fixture_root().join("tsconfig/cases/extends-symlink");
+    assert_extends_symlink_resolves_to_canonical(&f.join("project/tsconfig.relative.json"));
 }

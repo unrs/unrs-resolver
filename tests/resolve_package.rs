@@ -15,7 +15,7 @@ fn styled_components() {
     let module_path = dir
         .join("node_modules")
         .join(".pnpm")
-        .join("styled-components@6.1.17_react-dom@19.2.0_react@19.2.0__react@19.2.0")
+        .join("styled-components@6.1.17_react-dom@19.2.7_react@19.2.7__react@19.2.7")
         .join("node_modules")
         .join("styled-components");
     let specifier = "styled-components";
@@ -46,7 +46,7 @@ fn styled_components() {
 fn axios() {
     let dir = dir();
     let path = dir.join("fixtures/pnpm");
-    let module_path = dir.join("node_modules/.pnpm/axios@1.8.4/node_modules/axios");
+    let module_path = dir.join("node_modules/.pnpm/axios@1.8.4_debug@4.4.3/node_modules/axios");
     let specifier = "axios";
 
     // default

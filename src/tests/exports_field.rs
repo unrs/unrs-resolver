@@ -7,7 +7,8 @@ use std::path::Path;
 use serde_json::json;
 
 use crate::{
-    Ctx, PathUtil, ResolveError, ResolveOptions, Resolver, package_json::ImportsExportsEntry,
+    Ctx, PathUtil, ResolveError, ResolveOptions, Resolver,
+    package_json::{ImportsExportsEntry, ImportsExportsEntryGeneric},
 };
 
 #[test]
@@ -326,14 +327,14 @@ fn exports_field(value: &serde_json::Value) -> ImportsExportsEntry<'static> {
     let bytes = Box::leak::<'static>(Box::new(json_str.into_bytes()));
     let borrowed = simd_json::to_borrowed_value(bytes).unwrap();
     let value = Box::leak::<'static>(Box::new(borrowed));
-    ImportsExportsEntry(value)
+    ImportsExportsEntryGeneric(value)
 }
 
 #[cfg(target_endian = "big")]
 fn exports_field(value: &serde_json::Value) -> ImportsExportsEntry<'static> {
     // Clone and leak the value to get a 'static reference for big-endian
     let value = Box::leak::<'static>(Box::new(value.clone()));
-    ImportsExportsEntry(value)
+    ImportsExportsEntryGeneric(value)
 }
 
 #[test]
@@ -2563,8 +2564,8 @@ fn test_cases() {
                 assert!(
                     matches!(resolved_path, Err(ResolveError::PackagePathNotExported { .. })),
                     "{} {:?}",
-                    &case.name,
-                    &resolved_path
+                    case.name,
+                    resolved_path
                 );
             } else {
                 for expect in expect {
@@ -2572,12 +2573,12 @@ fn test_cases() {
                         resolved_path,
                         Ok(Some(Path::new(expect).normalize())),
                         "{}",
-                        &case.name
+                        case.name
                     );
                 }
             }
         } else {
-            assert!(resolved_path.is_err(), "{} {resolved_path:?}", &case.name);
+            assert!(resolved_path.is_err(), "{} {resolved_path:?}", case.name);
         }
     }
 }

@@ -31,6 +31,32 @@ pub enum ResolveError {
     #[error("Cannot find module '{0}'")]
     NotFound(/* specifier */ String),
 
+    /// The importing path matches multiple package IDs in a package map.
+    #[error(
+        "Cannot resolve {specifier:?} from {parent_path:?}: file is within multiple packages defined in {package_map_path:?}"
+    )]
+    PackageMapAmbiguousResolution {
+        specifier: String,
+        parent_path: PathBuf,
+        package_map_path: PathBuf,
+    },
+
+    /// The importing path is not owned by a package in a package map.
+    #[error(
+        "Cannot resolve {specifier:?} from {parent_path:?}: file is not within any package defined in {package_map_path:?}"
+    )]
+    PackageMapExternalFile { specifier: String, parent_path: PathBuf, package_map_path: PathBuf },
+
+    /// The package map does not conform to Node.js's package-map format.
+    #[error("Invalid package-map.json at {package_map_path:?}: {reason}")]
+    PackageMapInvalid { package_map_path: PathBuf, reason: String },
+
+    /// A dependency references a package ID that is absent from the package map.
+    #[error(
+        "Package key {package_id:?} referenced in dependencies but not defined in {package_map_path:?}"
+    )]
+    PackageMapKeyNotFound { package_id: String, package_map_path: PathBuf },
+
     /// Matched alias value  not found
     #[error("Cannot find module '{0}' for matched aliased key '{1}'")]
     MatchedAliasNotFound(/* specifier */ String, /* alias key */ String),
@@ -46,6 +72,13 @@ pub enum ResolveError {
     /// Occurs when tsconfig extends configs circularly
     #[error("Tsconfig extends configs circularly: {0}")]
     TsconfigCircularExtend(CircularPathBufs),
+
+    /// Failed to read or parse a tsconfig file.
+    ///
+    /// Keeps tsconfig load failures distinguishable from package.json ones,
+    /// which also surface as [ResolveError::Json] and [ResolveError::IOError].
+    #[error("Failed to load tsconfig {path:?}: {source}")]
+    TsconfigLoadFailed { path: PathBuf, source: Box<Self> },
 
     #[error("{0}")]
     IOError(IOError),

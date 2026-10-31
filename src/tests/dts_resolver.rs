@@ -1,7 +1,7 @@
 use crate::{ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions};
 
 fn dts_fixture() -> std::path::PathBuf {
-    super::fixture_root().join("dts_resolver")
+    super::fixture_root().join("dts-resolver")
 }
 
 fn containing_file() -> std::path::PathBuf {
@@ -38,6 +38,16 @@ fn relative_directory_index() {
     let r = resolver();
     let result = r.resolve_dts(containing_file(), "./relative-basic").unwrap();
     assert_eq!(result.path(), dts_fixture().join("relative-basic/index.ts"));
+}
+
+// -------- JSON --------
+
+#[test]
+fn json_file() {
+    let r = resolver();
+    let result = r.resolve_dts(containing_file(), "./relative-json/data.json").unwrap();
+    assert_eq!(result.path(), dts_fixture().join("relative-json/data.json"));
+    assert_eq!(result.module_type(), Some(crate::ModuleType::Json));
 }
 
 // -------- Extension substitution --------
@@ -212,7 +222,7 @@ fn typings_takes_precedence_over_types() {
 fn completely_unresolvable_package() {
     let r = resolver();
     let result = r.resolve_dts(containing_file(), "completely-empty");
-    assert!(result.is_err());
+    result.unwrap_err();
 }
 
 #[test]

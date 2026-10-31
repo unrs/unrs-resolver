@@ -8,7 +8,7 @@ unrs-resolver is a Rust port of webpack's enhanced-resolve, providing ESM and Co
 
 ### Key Technologies
 
-- **Rust**: Core implementation using Rust 2024 edition (MSRV: 1.85.0)
+- **Rust**: Core implementation using Rust 2024 edition (MSRV: 1.95.0)
 - **NAPI**: Node.js bindings for JavaScript/TypeScript usage
 - **WebAssembly**: Browser support
 - **GitHub Actions**: CI/CD workflows
@@ -125,7 +125,7 @@ fixtures/
 │   ├── misc/              # Unicode paths, BOM handling, package.json edge cases
 │   ├── dot/               # Dot-path resolution
 │   └── ...
-├── dts_resolver/          # .d.ts resolution fixtures
+├── dts-resolver/          # .d.ts resolution fixtures
 ├── invalid/               # Invalid configuration scenarios
 ├── pnp/                   # Yarn Plug'n'Play fixtures
 ├── pnpm/                  # pnpm node_modules structure
@@ -286,4 +286,5 @@ These commands map to their corresponding tools. For example, `vp dev --port 300
 
 - [ ] Run `vp install` after pulling remote changes and before getting started.
 - [ ] Run `vp check` and `vp test` to validate changes.
+
 <!--VITE PLUS END-->

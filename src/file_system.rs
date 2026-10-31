@@ -1,9 +1,10 @@
+#[cfg(feature = "yarn_pnp")]
+use std::sync::Arc;
 use std::{
-    fs, io,
+    cfg_select, fs, io,
     path::{Path, PathBuf},
 };
 
-use cfg_if::cfg_if;
 #[cfg(feature = "yarn_pnp")]
 use pnp::fs::{LruZipCache, VPath, VPathInfo, ZipCache};
 
@@ -12,10 +13,14 @@ use crate::ResolveError;
 /// File System abstraction used for `ResolverGeneric`
 pub trait FileSystem: Send + Sync {
     #[cfg(feature = "yarn_pnp")]
-    fn new(yarn_pnp: bool) -> Self;
+    fn new(yarn_pnp: bool) -> Self
+    where
+        Self: Sized;
 
     #[cfg(not(feature = "yarn_pnp"))]
-    fn new() -> Self;
+    fn new() -> Self
+    where
+        Self: Sized;
 
     /// See [std::fs::read]
     ///
@@ -124,12 +129,21 @@ impl From<fs::Metadata> for FileMetadata {
 }
 
 #[cfg(not(feature = "yarn_pnp"))]
+#[derive(Clone)]
 pub struct FileSystemOs;
 
 #[cfg(feature = "yarn_pnp")]
+#[derive(Clone)]
 pub struct FileSystemOs {
-    pnp_lru: LruZipCache<Vec<u8>>,
+    // `Arc` so `FileSystemOs` is cheaply `Clone`: clones share the same pnp zip cache.
+    pnp_lru: Arc<LruZipCache<Vec<u8>>>,
     yarn_pnp: bool,
+}
+
+impl std::fmt::Debug for FileSystemOs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FileSystemOs").finish()
+    }
 }
 
 impl FileSystemOs {
@@ -164,14 +178,15 @@ impl FileSystemOs {
     /// See [std::fs::metadata]
     #[inline]
     pub fn metadata(path: &Path) -> io::Result<FileMetadata> {
-        cfg_if! {
-            if #[cfg(target_os = "windows")] {
+        cfg_select! {
+            target_os = "windows" => {
                 let result = crate::windows::symlink_metadata(path)?;
                 if result.is_symlink {
                     return fs::metadata(path).map(FileMetadata::from);
                 }
                 Ok(result.into())
-            } else if #[cfg(target_os = "linux")] {
+            }
+            target_os = "linux" => {
                 use rustix::fs::{AtFlags, CWD, FileType, StatxFlags};
                 #[cfg(all(target_arch = "loongarch64", target_env = "musl"))]
                 let flags = AtFlags::empty();
@@ -188,7 +203,8 @@ impl FileSystemOs {
                     }
                     Err(err) => Err(err.into()),
                 }
-            } else {
+            }
+            _ => {
                 fs::metadata(path).map(FileMetadata::from)
             }
         }
@@ -199,10 +215,11 @@ impl FileSystemOs {
     /// See [std::fs::symlink_metadata]
     #[inline]
     pub fn symlink_metadata(path: &Path) -> io::Result<FileMetadata> {
-        cfg_if! {
-            if #[cfg(target_os = "windows")] {
+        cfg_select! {
+            target_os = "windows" => {
                 Ok(crate::windows::symlink_metadata(path)?.into())
-            } else if #[cfg(target_os = "linux")] {
+            }
+            target_os = "linux" => {
                 use rustix::fs::{AtFlags, CWD, FileType, StatxFlags};
                 match rustix::fs::statx(CWD, path, AtFlags::SYMLINK_NOFOLLOW, StatxFlags::TYPE) {
                     Ok(statx) => {
@@ -215,7 +232,8 @@ impl FileSystemOs {
                     }
                     Err(err) => Err(err.into()),
                 }
-            } else {
+            }
+            _ => {
                 fs::symlink_metadata(path).map(FileMetadata::from)
             }
         }
@@ -227,12 +245,9 @@ impl FileSystemOs {
     #[inline]
     pub fn read_link(path: &Path) -> Result<PathBuf, ResolveError> {
         let path = fs::read_link(path)?;
-        cfg_if! {
-            if #[cfg(target_os = "windows")] {
-                crate::windows::strip_windows_prefix(path)
-            } else {
-                Ok(path)
-            }
+        cfg_select! {
+            target_os = "windows" => crate::windows::strip_windows_prefix(path),
+            _ => Ok(path),
         }
     }
 
@@ -248,7 +263,7 @@ impl FileSystemOs {
 impl FileSystem for FileSystemOs {
     #[cfg(feature = "yarn_pnp")]
     fn new(yarn_pnp: bool) -> Self {
-        Self { pnp_lru: LruZipCache::new(50, pnp::fs::open_zip_via_read_p), yarn_pnp }
+        Self { pnp_lru: Arc::new(LruZipCache::new(50, pnp::fs::open_zip_via_read_p)), yarn_pnp }
     }
 
     #[cfg(not(feature = "yarn_pnp"))]
@@ -257,18 +272,13 @@ impl FileSystem for FileSystemOs {
     }
 
     fn read(&self, path: &Path) -> io::Result<Vec<u8>> {
-        cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                if self.yarn_pnp {
-                    return match VPath::from(path)? {
-                        VPath::Zip(info) => {
-                            self.pnp_lru.read(info.physical_base_path(), info.zip_path)
-                        }
-                        VPath::Virtual(info) => fs::read(info.physical_base_path()),
-                        VPath::Native(path) => fs::read(path),
-                    }
-                }
-            }
+        #[cfg(feature = "yarn_pnp")]
+        if self.yarn_pnp {
+            return match VPath::from(path)? {
+                VPath::Zip(info) => self.pnp_lru.read(info.physical_base_path(), info.zip_path),
+                VPath::Virtual(info) => fs::read(info.physical_base_path()),
+                VPath::Native(path) => fs::read(path),
+            };
         }
         fs::read(path)
     }
@@ -279,55 +289,61 @@ impl FileSystem for FileSystemOs {
     }
 
     fn metadata(&self, path: &Path) -> io::Result<FileMetadata> {
-        cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                if self.yarn_pnp {
-                    return match VPath::from(path)? {
-                        VPath::Zip(info) => self
-                            .pnp_lru
-                            .file_type(info.physical_base_path(), info.zip_path)
-                            .map(FileMetadata::from),
-                        VPath::Virtual(info) => {
-                            Self::metadata(&info.physical_base_path())
-                        }
-                        VPath::Native(path) => Self::metadata(&path),
-                    }
-                }
-            }
+        #[cfg(feature = "yarn_pnp")]
+        if self.yarn_pnp {
+            return match VPath::from(path)? {
+                VPath::Zip(info) => self
+                    .pnp_lru
+                    .file_type(info.physical_base_path(), info.zip_path)
+                    .map(FileMetadata::from),
+                VPath::Virtual(info) => Self::metadata(&info.physical_base_path()),
+                VPath::Native(path) => Self::metadata(&path),
+            };
         }
         Self::metadata(path)
     }
 
     fn symlink_metadata(&self, path: &Path) -> io::Result<FileMetadata> {
+        // Mirror `metadata`'s virtual-path translation. Without it, `lstat`-ing a
+        // virtual or zip path directly stats a path that may not physically exist, so
+        // canonicalization cannot detect symlinks correctly under Yarn PnP. Zip entries
+        // are never symlinks, so reuse the same file-type lookup as `metadata`.
+        #[cfg(feature = "yarn_pnp")]
+        if self.yarn_pnp {
+            return match VPath::from(path)? {
+                VPath::Zip(info) => self
+                    .pnp_lru
+                    .file_type(info.physical_base_path(), info.zip_path)
+                    .map(FileMetadata::from),
+                VPath::Virtual(info) => Self::symlink_metadata(&info.physical_base_path()),
+                VPath::Native(path) => Self::symlink_metadata(&path),
+            };
+        }
         Self::symlink_metadata(path)
     }
 
     fn read_link(&self, path: &Path) -> Result<PathBuf, ResolveError> {
-        cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                if self.yarn_pnp {
-                    return match VPath::from(path)? {
-                        VPath::Zip(info) => Self::read_link(&info.physical_base_path().join(info.zip_path)),
-                        VPath::Virtual(info) => Self::read_link(&info.physical_base_path()),
-                        VPath::Native(path) => Self::read_link(&path),
-                    }
-                }
-            }
+        #[cfg(feature = "yarn_pnp")]
+        if self.yarn_pnp {
+            return match VPath::from(path)? {
+                VPath::Zip(info) => Self::read_link(&info.physical_base_path().join(info.zip_path)),
+                VPath::Virtual(info) => Self::read_link(&info.physical_base_path()),
+                VPath::Native(path) => Self::read_link(&path),
+            };
         }
         Self::read_link(path)
     }
 
     fn canonicalize(&self, path: &Path) -> io::Result<PathBuf> {
-        cfg_if! {
-            if #[cfg(feature = "yarn_pnp")] {
-                if self.yarn_pnp {
-                    return match VPath::from(path)? {
-                        VPath::Zip(info) => Self::canonicalize(&info.physical_base_path().join(info.zip_path)),
-                        VPath::Virtual(info) => Self::canonicalize(&info.physical_base_path()),
-                        VPath::Native(path) => Self::canonicalize(&path),
-                    }
+        #[cfg(feature = "yarn_pnp")]
+        if self.yarn_pnp {
+            return match VPath::from(path)? {
+                VPath::Zip(info) => {
+                    Self::canonicalize(&info.physical_base_path().join(info.zip_path))
                 }
-            }
+                VPath::Virtual(info) => Self::canonicalize(&info.physical_base_path()),
+                VPath::Native(path) => Self::canonicalize(&path),
+            };
         }
         Self::canonicalize(path)
     }
@@ -340,7 +356,6 @@ fn metadata() {
         format!("{meta:?}"),
         "FileMetadata { is_file: true, is_dir: true, is_symlink: true }"
     );
-    let _ = meta;
 }
 
 #[test]

@@ -1,7 +1,6 @@
 use std::{env, fs};
 
 use rayon::prelude::*;
-
 use unrs_resolver::{ResolveOptions, Resolver};
 
 fn main() {

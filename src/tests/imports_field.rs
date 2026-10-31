@@ -6,7 +6,10 @@ use std::path::Path;
 
 use serde_json::json;
 
-use crate::{Ctx, ImportsExportsMap, PathUtil, ResolveError, ResolveOptions, Resolver};
+use crate::{
+    Ctx, ImportsExportsMap, PathUtil, ResolveError, ResolveOptions, Resolver,
+    package_json::ImportsExportsMapGeneric,
+};
 
 #[test]
 fn test_simple() {
@@ -116,7 +119,7 @@ fn imports_field(value: &serde_json::Value) -> ImportsExportsMap<'static> {
         panic!("Expected an object");
     };
     let map = Box::leak::<'static>(Box::new(map));
-    ImportsExportsMap(map)
+    ImportsExportsMapGeneric(map)
 }
 
 #[cfg(target_endian = "big")]
@@ -126,10 +129,10 @@ fn imports_field(value: &serde_json::Value) -> ImportsExportsMap<'static> {
     let serde_json::Value::Object(map) = value else {
         panic!("Expected an object");
     };
-    ImportsExportsMap(map)
+    ImportsExportsMapGeneric(map)
 }
 
-#[allow(clippy::too_many_lines)]
+#[expect(clippy::too_many_lines, reason = "test table ported from enhanced-resolve")]
 #[test]
 fn test_cases() {
     let test_cases = vec![
@@ -745,6 +748,24 @@ fn test_cases() {
             condition_names: vec!["import", "require"],
         },
         TestCase {
+            name: "invalid target in last array entry",
+            expect: None,
+            imports_field: imports_field(&json!({
+              "#a": ["../invalid.js"]
+            })),
+            request: "#a",
+            condition_names: vec![],
+        },
+        TestCase {
+            name: "invalid target in non-last array entry",
+            expect: Some(vec!["./ok.js"]),
+            imports_field: imports_field(&json!({
+              "#a": ["../invalid.js", "./ok.js"]
+            })),
+            request: "#a",
+            condition_names: vec![],
+        },
+        TestCase {
             name: "mapping to a folder root #1",
             expect: Some(vec![]),
             imports_field: imports_field(&json!({
@@ -1335,19 +1356,19 @@ fn test_cases() {
             .map(|p| p.map(|p| p.to_path_buf()));
         if let Some(expect) = case.expect {
             if expect.is_empty() {
-                assert!(matches!(resolved_path, Ok(None)), "{} {:?}", &case.name, &resolved_path);
+                assert!(matches!(resolved_path, Ok(None)), "{} {:?}", case.name, resolved_path);
             } else {
                 for expect in expect {
                     assert_eq!(
                         resolved_path,
                         Ok(Some(Path::new(expect).normalize())),
                         "{}",
-                        &case.name
+                        case.name
                     );
                 }
             }
         } else {
-            assert!(resolved_path.is_err(), "{} {resolved_path:?}", &case.name);
+            assert!(resolved_path.is_err(), "{} {resolved_path:?}", case.name);
         }
     }
 }

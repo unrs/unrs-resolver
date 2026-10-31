@@ -92,6 +92,14 @@ See [docs.rs/unrs_resolver](https://docs.rs/unrs_resolver/latest/unrs_resolver/)
   - `.pnp.cjs` manifest file exists in the closest directory, searched from the current working directory,
   - no multi-project setup, per second bullet point in [FIND_PNP_MANIFEST](https://yarnpkg.com/advanced/pnp-spec#find_pnp_manifest)
 
+### [Node.js package maps](https://nodejs.org/api/packages.html#package-maps)
+
+Package-map resolution is enabled automatically when `NODE_OPTIONS` contains Node's
+`--experimental-package-map` option. No resolver option is required. Package managers can generate
+the map and inject the option by enabling
+[`nodeExperimentalPackageMap` in pnpm](https://pnpm.io/settings#nodeexperimentalpackagemap) or
+[`nodeExperimentalPackageMap` in Yarn](https://yarnpkg.com/configuration/yarnrc#nodeExperimentalPackageMap).
+
 ## Terminology
 
 ### `directory`
@@ -300,22 +308,6 @@ Irrelevant tests
 - unsafe-cache.test.js
 - yield.test.js
 
-## [Sponsored By](https://github.com/sponsors/JounQin)
-
-[![Sponsors](https://raw.githubusercontent.com/1stG/static/master/sponsors.svg)](https://github.com/sponsors/JounQin)
-
-### Sponsors
-
-| 1stG                                                                                                                               | UnRs                                                                                                                               | UnTS                                                                                                                               |
-| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![UnRs Open Collective backers and sponsors](https://opencollective.com/unrs/organizations.svg)](https://opencollective.com/unrs) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
-
-### Backers
-
-| 1stG                                                                                                                             | UnRs                                                                                                                             | UnTS                                                                                                                             |
-| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![UnRs Open Collective backers and sponsors](https://opencollective.com/unrs/individuals.svg)](https://opencollective.com/unrs) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |
-
 ## 📖 License
 
 `unrs_resolver` is free and open-source software licensed under the [MIT License](./LICENSE).
@@ -349,3 +341,19 @@ UnRS partially copies code from the following projects.
 [npm-badge]: https://img.shields.io/npm/dw/unrs-resolver?label=npm
 [npm-url]: https://npmx.dev/package/unrs-resolver
 [tsconfck]: https://github.com/dominikg/tsconfck
+
+## [Sponsored By](https://github.com/sponsors/JounQin)
+
+[![Sponsors](https://raw.githubusercontent.com/1stG/static/master/sponsors.svg)](https://github.com/sponsors/JounQin)
+
+### Sponsors
+
+| 1stG                                                                                                                               | UnRs                                                                                                                               | UnTS                                                                                                                               |
+| ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/organizations.svg)](https://opencollective.com/1stG) | [![UnRs Open Collective backers and sponsors](https://opencollective.com/unrs/organizations.svg)](https://opencollective.com/unrs) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/organizations.svg)](https://opencollective.com/unts) |
+
+### Backers
+
+| 1stG                                                                                                                             | UnRs                                                                                                                             | UnTS                                                                                                                             |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| [![1stG Open Collective backers and sponsors](https://opencollective.com/1stG/individuals.svg)](https://opencollective.com/1stG) | [![UnRs Open Collective backers and sponsors](https://opencollective.com/unrs/individuals.svg)](https://opencollective.com/unrs) | [![UnTS Open Collective backers and sponsors](https://opencollective.com/unts/individuals.svg)](https://opencollective.com/unts) |

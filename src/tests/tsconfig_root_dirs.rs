@@ -42,8 +42,8 @@ fn test() {
         (f.join("root-dirs-parent-nav"), "generated/folder2/file3.ts", "../folder1/file1", f.join("root-dirs-parent-nav/folder1/file1.ts")),
 
         // Test Case 7: Directory import with parent navigation
-        // Import ../folder1/file1_1 from generated/folder2/file3.ts resolves to folder1/file1_1/index.ts
-        (f.join("root-dirs-parent-dir"), "generated/folder2/file3.ts", "../folder1/file1_1", f.join("root-dirs-parent-dir/folder1/file1_1/index.ts")),
+        // Import ../folder1/file1-1 from generated/folder2/file3.ts resolves to folder1/file1-1/index.ts
+        (f.join("root-dirs-parent-dir"), "generated/folder2/file3.ts", "../folder1/file1-1", f.join("root-dirs-parent-dir/folder1/file1-1/index.ts")),
 
         // Test Case 8: Single rootDir entry
         // Verify that rootDirs works correctly with only one entry
@@ -100,4 +100,21 @@ fn test() {
             "expected NotFound error from {path:?} resolve {request}, got {resolved_path:?}"
         );
     }
+}
+
+#[test]
+fn test_root_dirs_via_extends() {
+    let f = super::fixture_root().join("tsconfig/cases/root-dirs-extends");
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("tsconfig.json"),
+            references: TsconfigReferences::Disabled,
+        })),
+        extensions: vec![".ts".into(), ".d.ts".into()],
+        ..ResolveOptions::default()
+    });
+    let from = f.join("src/routes/+page.ts");
+    let path = resolver.resolve(&from, "./$types").map(|r| r.full_path());
+    let expected = f.join(".svelte-kit/types/src/routes/$types.d.ts");
+    assert_eq!(path, Ok(expected), "from {from:?} resolve ./$types");
 }

@@ -3,7 +3,10 @@
 //! Code adapted from the following libraries
 //! * [path-absolutize](https://docs.rs/path-absolutize)
 //! * [normalize_path](https://docs.rs/normalize-path)
-use std::path::{Component, Path, PathBuf};
+use std::{
+    cfg_select,
+    path::{Component, Path, PathBuf},
+};
 
 pub const SLASH_START: &[char; 2] = &['/', '\\'];
 
@@ -79,34 +82,11 @@ impl PathUtil for Path {
     }
 
     // https://github.com/parcel-bundler/parcel/blob/e0b99c2a42e9109a9ecbd6f537844a1b33e7faf5/packages/utils/node-resolver-rs/src/path.rs#L37
+    #[inline]
     fn normalize_with<B: AsRef<Self>>(&self, subpath: B) -> PathBuf {
-        let subpath = subpath.as_ref();
-
-        let mut components = subpath.components();
-
-        let Some(head) = components.next() else { return subpath.to_path_buf() };
-
-        if matches!(head, Component::Prefix(..) | Component::RootDir) {
-            return subpath.to_path_buf();
-        }
-
-        let mut ret = self.to_path_buf();
-        for component in std::iter::once(head).chain(components) {
-            match component {
-                Component::CurDir => {}
-                Component::ParentDir => {
-                    ret.pop();
-                }
-                Component::Normal(c) => {
-                    ret.push(c);
-                }
-                Component::Prefix(..) | Component::RootDir => {
-                    unreachable!("Path {:?} Subpath {:?}", self, subpath)
-                }
-            }
-        }
-
-        ret
+        // Forward to a single non-generic instantiation so the many `AsRef<Path>`
+        // call sites don't each monomorphize the full body (binary-size win).
+        normalize_with_impl(self, subpath.as_ref())
     }
 
     fn is_invalid_exports_target(&self) -> bool {
@@ -116,6 +96,52 @@ impl PathUtil for Path {
             Component::Normal(c) => c.eq_ignore_ascii_case("node_modules"),
             _ => false,
         })
+    }
+}
+
+// Non-generic body of [`PathUtil::normalize_with`]. Kept out of the generic method so it is
+// compiled once instead of once per `AsRef<Path>` argument type at the call sites.
+fn normalize_with_impl(base: &Path, subpath: &Path) -> PathBuf {
+    let mut components = subpath.components();
+
+    let Some(head) = components.next() else { return subpath.to_path_buf() };
+
+    if matches!(head, Component::Prefix(..) | Component::RootDir) {
+        return subpath.to_path_buf();
+    }
+
+    let mut ret = base.to_path_buf();
+    // Fold `head` in by hand rather than `std::iter::once(head).chain(components)`, whose
+    // `Chain<Once<_>, Components>` adapter bloats the stack frame.
+    push_normalized_component(&mut ret, head);
+    for component in components {
+        push_normalized_component(&mut ret, component);
+    }
+
+    ret
+}
+
+/// `Prefix`/`RootDir` can only be a `Components` iterator's first item, which callers consume
+/// before reaching here, so those arms are unreachable.
+#[inline]
+pub fn push_normalized_component(ret: &mut PathBuf, component: Component<'_>) {
+    match component {
+        Component::CurDir => {}
+        Component::ParentDir => {
+            ret.pop();
+        }
+        Component::Normal(c) => {
+            cfg_select! {
+                target_family = "wasm" => {
+                    // Need to trim the extra \0 introduces by https://github.com/nodejs/uvwasi/issues/262
+                    ret.push(c.to_string_lossy().trim_end_matches('\0'));
+                }
+                _ => {
+                    ret.push(c);
+                }
+            }
+        }
+        Component::Prefix(..) | Component::RootDir => unreachable!(),
     }
 }
 

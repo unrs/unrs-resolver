@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    CachedPath, Ctx, FileSystem, ResolveError, ResolveOptions, ResolveResult, ResolverGeneric,
+    CachedPath, Ctx, ResolveError, ResolveOptions, ResolveResult, ResolverImpl, Specifier,
     SpecifierError, TsConfig, TsconfigDiscovery, TsconfigOptions, TsconfigReferences,
     path::PathUtil,
 };
@@ -34,7 +34,7 @@ impl TsconfigResolveContext {
     }
 }
 
-impl<Fs: FileSystem> ResolverGeneric<Fs> {
+impl ResolverImpl {
     /// Finds the `tsconfig` to which this `path` belongs.
     ///
     /// If the `path` is inside `node_modules`, this function always returns `None`.
@@ -53,7 +53,9 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
         &self,
         path: P,
     ) -> Result<Option<Arc<TsConfig>>, ResolveError> {
-        let path = path.as_ref();
+        let path = path.as_ref().to_string_lossy();
+        let specifier = Specifier::parse(path.as_ref()).map_err(ResolveError::Specifier)?;
+        let path = Path::new(specifier.path());
         let cached_path = self.cache.value(path);
         self.find_tsconfig_tracing(&cached_path)
     }
@@ -90,7 +92,7 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
     ///
     /// # Errors
     ///
-    /// * [ResolveError::Json]
+    /// * [ResolveError::TsconfigLoadFailed]
     fn find_tsconfig_impl(
         &self,
         cached_path: &CachedPath,
@@ -112,26 +114,47 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
             if let Some(tsconfig) = cv.tsconfig.get_or_try_init(|| {
                 let tsconfig_path = cv.path.join("tsconfig.json");
                 let tsconfig_path = self.cache.value(&tsconfig_path);
-                if self.cache.is_file(&tsconfig_path, &mut ctx) {
+                if self.is_file(&tsconfig_path, &mut ctx) {
                     match self.resolve_tsconfig(tsconfig_path.path()) {
                         Ok(tsconfig) => Ok(Some(tsconfig)),
                         // Skip unreadable tsconfig files (e.g. permission denied)
                         // and continue walking parent directories
-                        Err(ResolveError::IOError(_)) => Ok(None),
+                        Err(ResolveError::TsconfigLoadFailed { ref source, .. })
+                            if matches!(source.as_ref(), ResolveError::IOError(_)) =>
+                        {
+                            Ok(None)
+                        }
                         Err(e) => Err(e),
                     }
                 } else {
                     Ok(None)
                 }
             })? {
-                return Ok(Some(Arc::clone(tsconfig)));
+                // Return the nearest tsconfig that owns the file (directly via
+                // `files`/`include`/`exclude`, or via a matching reference);
+                // otherwise keep walking up to an ancestor that does.
+                if tsconfig.claims_ownership_of(cached_path.path()) {
+                    return Ok(Some(Arc::clone(tsconfig)));
+                }
             }
             cache_value = cv.parent(&self.cache);
         }
+        // No tsconfig owns the file. Both `tsserver` and `typescript-go` leave
+        // such a file in an inferred project (no `paths`/`baseUrl`), rather than
+        // applying an unrelated ancestor's `compilerOptions`, so return `None`.
         Ok(None)
     }
 
-    pub(crate) fn find_tsconfig_manual(
+    /// The manually configured tsconfig ([`TsconfigDiscovery::Manual`]); `Auto` discovery is
+    /// deliberately skipped.
+    pub(crate) fn manual_tsconfig(&self) -> Result<Option<Arc<TsConfig>>, ResolveError> {
+        match &self.options.tsconfig {
+            Some(TsconfigDiscovery::Manual(o)) => self.find_tsconfig_manual(o),
+            _ => Ok(None),
+        }
+    }
+
+    fn find_tsconfig_manual(
         &self,
         tsconfig_options: &TsconfigOptions,
     ) -> Result<Option<Arc<TsConfig>>, ResolveError> {
@@ -190,14 +213,20 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
                 ));
             }
 
-            // Extend tsconfig
+            // Extend tsconfig.
+            //
+            // Per TypeScript spec, when the `extends` field is an array later
+            // configurations take precedence over earlier ones. Since
+            // `extend_tsconfig` only fills `None` fields, we iterate in reverse
+            // so that the last base sets fields first and earlier bases can no
+            // longer override them — net effect: later wins.
             let extended_tsconfig_paths = tsconfig
                 .extends()
                 .map(|specifier| self.get_extended_tsconfig_path(&directory, tsconfig, specifier))
                 .collect::<Result<Vec<_>, _>>()?;
             if !extended_tsconfig_paths.is_empty() {
                 ctx.with_extended_file(tsconfig.path().to_owned(), |ctx| {
-                    for extended_tsconfig_path in extended_tsconfig_paths {
+                    for extended_tsconfig_path in extended_tsconfig_paths.into_iter().rev() {
                         let extended_tsconfig = self.load_tsconfig(
                             /* root */ false,
                             &extended_tsconfig_path,
@@ -249,7 +278,9 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
             .extends()
             .map(|specifier| self.get_extended_tsconfig_path(directory, tsconfig, specifier))
             .collect::<Result<Vec<_>, _>>()?;
-        for extended_tsconfig_path in extended_tsconfig_paths {
+        // Iterate in reverse so that later `extends` entries take precedence —
+        // see comment in `load_tsconfig`.
+        for extended_tsconfig_path in extended_tsconfig_paths.into_iter().rev() {
             let extended_tsconfig = self.load_tsconfig(
                 /* root */ false,
                 &extended_tsconfig_path,
@@ -336,7 +367,7 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
         let Some(root_dirs) = &tsconfig.compiler_options.root_dirs else { return Ok(None) };
 
         // Use the containing directory, not the file itself
-        let containing_directory = if self.cache.is_dir(cached_path, ctx) {
+        let containing_directory = if self.is_dir(cached_path, ctx) {
             cached_path.clone()
         } else {
             cached_path.parent(&self.cache).unwrap_or_else(|| cached_path.clone())
@@ -378,6 +409,31 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
         Ok(None)
     }
 
+    /// Lookup configuration shared by tsconfig `extends` targets that resolve
+    /// through `node_modules`: bare package specifiers (via the package
+    /// `exports` field) and `#`-prefixed subpath imports (via the package
+    /// `imports` field). Both use the same conditions so that, for example,
+    /// `extends: "pkg"` and `extends: "#pkg"` agree on which condition wins.
+    fn tsconfig_extends_resolver(&self) -> Self {
+        let options = ResolveOptions {
+            tsconfig: None,
+            condition_names: vec!["node".into(), "import".into()],
+            extensions: vec![".json".into()],
+            main_files: vec!["tsconfig".into()],
+            #[cfg(feature = "yarn_pnp")]
+            yarn_pnp: self.options.yarn_pnp,
+            #[cfg(feature = "yarn_pnp")]
+            cwd: self.options.cwd.clone(),
+            ..ResolveOptions::default()
+        }
+        .sanitize();
+        let alias = crate::alias::compile_alias(&options.alias);
+        let fallback = crate::alias::compile_alias(&options.fallback);
+        // Extends-resolution never toggles `yarn_pnp`, so reuse the same cache (and thus the
+        // same underlying filesystem) rather than rebuilding it.
+        Self { options, cache: Arc::clone(&self.cache), alias, fallback }
+    }
+
     fn get_extended_tsconfig_path(
         &self,
         directory: &CachedPath,
@@ -388,19 +444,26 @@ impl<Fs: FileSystem> ResolverGeneric<Fs> {
             None => Err(ResolveError::Specifier(SpecifierError::Empty(specifier.to_string()))),
             Some(b'/') => Ok(PathBuf::from(specifier)),
             Some(b'.') => Ok(tsconfig.directory().normalize_with(specifier)),
+            // Node.js subpath imports, e.g. `extends: "#config"`, resolved
+            // through the nearest `package.json` `imports` field — the same
+            // path the resolver takes for `require("#config")`.
+            Some(b'#') => {
+                let resolved = self
+                    .tsconfig_extends_resolver()
+                    .load_package_imports(directory, specifier, Some(tsconfig), &mut Ctx::default())
+                    .map_err(|err| match err {
+                        ResolveError::PackageImportNotDefined(..) | ResolveError::NotFound(..) => {
+                            ResolveError::TsconfigNotFound(PathBuf::from(specifier))
+                        }
+                        _ => err,
+                    })?;
+                resolved
+                    .map(|p| p.path().to_path_buf())
+                    .ok_or_else(|| ResolveError::TsconfigNotFound(PathBuf::from(specifier)))
+            }
             _ => self
-                .clone_with_options(ResolveOptions {
-                    tsconfig: None,
-                    condition_names: vec!["node".into(), "import".into()],
-                    extensions: vec![".json".into()],
-                    main_files: vec!["tsconfig".into()],
-                    #[cfg(feature = "yarn_pnp")]
-                    yarn_pnp: self.options.yarn_pnp,
-                    #[cfg(feature = "yarn_pnp")]
-                    cwd: self.options.cwd.clone(),
-                    ..ResolveOptions::default()
-                })
-                .load_package_self_or_node_modules(directory, specifier, None, &mut Ctx::default())
+                .tsconfig_extends_resolver()
+                .load_bare_package(directory, specifier, None, &mut Ctx::default())
                 .map(|p| p.to_path_buf())
                 .map_err(|err| match err {
                     ResolveError::NotFound(_) => {

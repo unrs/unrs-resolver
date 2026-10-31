@@ -11,6 +11,38 @@ fn tsconfig_discovery() {
     super::tsconfig_paths::tsconfig_resolve_impl(/* tsconfig_discovery */ true);
 }
 
+/// An extensionless file is owned through a `files` entry — a literal exact-path
+/// match — even when a *nearer* `tsconfig.json` exists that does not list it (an
+/// `include` glob cannot match an extensionless path). Ownership belongs to the
+/// outer config that lists `sub/ccc` in `files`, so only its `@x/*` alias applies.
+///
+/// Previously `claims_ownership_of` returned `true` for every extensionless path,
+/// so the nearer `sub/tsconfig.json` wrongly claimed `ccc` by proximity.
+#[test]
+fn extensionless_file_owned_via_files_array() {
+    let f = super::fixture_root().join("tsconfig/cases/extensionless-file");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let importer = f.join("sub/ccc");
+
+    // Owned by the outer config (via `files`), not the nearer `sub/tsconfig.json`.
+    let tsconfig = resolver.find_tsconfig(&importer).unwrap().unwrap();
+    assert_eq!(tsconfig.path, f.join("tsconfig.json"));
+
+    // The outer `@x/*` alias applies.
+    let resolved_path = resolver.resolve_file(&importer, "@x/foo").map(|r| r.full_path());
+    assert_eq!(resolved_path, Ok(f.join("x/foo.ts")));
+
+    // The nearer config's `@y/*` alias does not (it does not own the file).
+    let not_owned = resolver.resolve_file(&importer, "@y/foo").map(|r| r.full_path());
+    assert_eq!(not_owned, Err(ResolveError::NotFound("@y/foo".into())));
+}
+
 #[test]
 fn tsconfig_discovery_virtual_file_importer() {
     let f = super::fixture_root().join("tsconfig");
@@ -31,8 +63,7 @@ fn tsconfig_discovery_virtual_file_importer() {
 #[test]
 #[cfg(unix)]
 fn tsconfig_discovery_skips_unreadable_file() {
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
+    use std::{fs, os::unix::fs::PermissionsExt};
 
     let dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target").join("test_unreadable_tsconfig");
@@ -60,4 +91,24 @@ fn tsconfig_discovery_skips_unreadable_file() {
         matches!(&result, Ok(None)),
         "expected Ok(None) for unreadable tsconfig, got {result:?}",
     );
+}
+
+#[test]
+fn tsconfig_discovery_query_params() {
+    let f = super::fixture_root().join("tsconfig/cases/query-params");
+
+    let resolver = Resolver::new(ResolveOptions {
+        tsconfig: Some(TsconfigDiscovery::Auto),
+        ..ResolveOptions::default()
+    });
+
+    let p = f.join("src/index.ts");
+    let expected_tsconfig = f.join("tsconfig.app.json");
+
+    let tsconfig = resolver.find_tsconfig(&p).unwrap().unwrap();
+    assert_eq!(tsconfig.path, expected_tsconfig);
+
+    let path_with_both = format!("{}?custom=foo#fragment", p.display());
+    let tsconfig = resolver.find_tsconfig(&path_with_both).unwrap().unwrap();
+    assert_eq!(tsconfig.path, expected_tsconfig,);
 }
