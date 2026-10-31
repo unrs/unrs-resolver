@@ -197,6 +197,32 @@ fn sibling_reference_without_paths_does_not_shadow_parent() {
 }
 
 #[test]
+fn directory_fallback_to_parent_paths_for_unmapped_reference() {
+    // `resolve()` only hands an importer directory to the reference-aware lookup, so
+    // ownership cannot be established: a reference without a mapping falls back to the
+    // parent's `paths` (the pre-1.12 `[ref_paths, self_paths].concat()` semantics).
+    let f = super::fixture_root().join("tsconfig/cases/project-references");
+
+    let resolver = Resolver::new(ResolveOptions {
+        extensions: vec![".ts".into()],
+        tsconfig: Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            config_file: f.join("app"),
+            references: TsconfigReferences::Auto,
+        })),
+        ..ResolveOptions::default()
+    });
+
+    assert_eq!(
+        resolver.resolve(f.join("project-c"), "@/index.ts").map(|r| r.full_path()),
+        Ok(f.join("app/aliased/index.ts")),
+    );
+    assert_eq!(
+        resolver.resolve_file(f.join("project-c/index.ts"), "@/index.ts"),
+        Err(ResolveError::NotFound("@/index.ts".into())),
+    );
+}
+
+#[test]
 fn walk_up_when_ref_files_does_not_cover_file() {
     let f = super::fixture_root().join("tsconfig/cases/project-references-walk-up/files-misses");
 
