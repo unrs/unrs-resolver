@@ -698,9 +698,18 @@ if (!nativeBinding || forceWasi) {
   }
 }
 
-if (!nativeBinding && globalThis.process?.versions?.["webcontainer"]) {
+if (!nativeBinding && process.env["SKIP_UNRS_RESOLVER_FALLBACK"] !== '1') {
   try {
-    nativeBinding = require('napi-postinstall/fallback')(require.resolve('./package.json'), true);
+    nativeBinding = require('napi-postinstall/fallback')(
+      require.resolve('./package.json'),
+      true,
+    )
+    if (
+      typeof __napiLoadedBindingTarget !== 'undefined' &&
+      typeof nativeBinding.__napiBindingTarget === 'string'
+    ) {
+      __napiLoadedBindingTarget = nativeBinding.__napiBindingTarget
+    }
   } catch (err) {
     loadErrors.push(err)
   }
@@ -794,3 +803,4 @@ module.exports.sync = nativeBinding.sync
 if (process.versions.pnp) {
   process.env.UNRS_RESOLVER_YARN_PNP = '1'
 }
+

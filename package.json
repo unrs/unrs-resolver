@@ -14,8 +14,7 @@
   "files": [
     "browser.js",
     "index.d.ts",
-    "index.js",
-    "postinstall.js"
+    "index.js"
   ],
   "main": "index.js",
   "browser": "browser.js",
@@ -31,11 +30,10 @@
     "build:debug": "node napi/build.mjs",
     "build": "pnpm build:debug --features allocator --release",
     "postbuild:debug": "node napi/patch.mjs",
-    "postinstall": "node postinstall.js",
     "prepublishOnly": "clean-pkg-json -k napi"
   },
   "dependencies": {
-    "napi-postinstall": "^0.3.4"
+    "napi-postinstall": "^0.3.7"
   },
   "devDependencies": {
     "@emnapi/core": "2.0.0-alpha.6",

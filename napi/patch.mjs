@@ -1,25 +1,14 @@
-import fs from "node:fs";
+import { patch } from "napi-postinstall/patch";
 
-const filename = "./napi/index.js";
-let data = fs.readFileSync(filename, "utf-8");
-data = data.replace(
-  "\nif (!nativeBinding) {",
-  (s) =>
-    `
-if (!nativeBinding && globalThis.process?.versions?.["webcontainer"]) {
-  try {
-    nativeBinding = require('napi-postinstall/fallback')(require.resolve('./package.json'), true);
-  } catch (err) {
-    loadErrors.push(err)
-  }
-}
-` + s,
-);
-data =
-  data +
-  `
-if (process.versions.pnp) {
+// Inserts the all-platform runtime fallback (no WebContainer-only guard) before the
+// loader's final `if (!nativeBinding)` check, guarded by `SKIP_UNRS_RESOLVER_FALLBACK`.
+// It replaces the old postinstall script, so installs that skip build scripts (pnpm 10+,
+// `--ignore-scripts`, npm RFC #868) still get a working binding on first require.
+patch({
+  entry: "./napi/index.js",
+  name: "unrs-resolver",
+  append: `if (process.versions.pnp) {
   process.env.UNRS_RESOLVER_YARN_PNP = '1'
 }
-`;
-fs.writeFileSync(filename, data);
+`,
+});

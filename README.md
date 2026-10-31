@@ -33,6 +33,8 @@ Rust port of [enhanced-resolve], [tsconfig-paths-webpack-plugin] and [tsconfck]
 
 See `index.d.ts` for `resolveSync` and `ResolverFactory` API.
 
+The package has no install script, so package managers that ignore build scripts (pnpm 10+, `--ignore-scripts`, and npm's upcoming [RFC #868](https://github.com/npm/rfcs/pull/868) default) install it without warnings. If the platform binding is missing anyway — npm's optional-dependency bug, or a package manager that skipped it — the loader installs the matching `@unrs/resolver-binding-*` package on first `require`, on native platforms and in WebContainer alike. Set `SKIP_UNRS_RESOLVER_FALLBACK=1` to opt out.
+
 Quick example:
 
 ```javascript
