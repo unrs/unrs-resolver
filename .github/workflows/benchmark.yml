@@ -35,7 +35,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.4
 
       - name: Install bench-pm fixtures
         run: just install-bench-fixtures
@@ -44,7 +44,7 @@ jobs:
         env:
           RUSTFLAGS: "-C debuginfo=1 -C strip=none"
 
-      - uses: CodSpeedHQ/action@c4fd08a3a159bd0cc208da1e0edf32b8c47d75e5 # v5.4.0
+      - uses: CodSpeedHQ/action@61efe07e57e55bedeab750c434504de272a56e8c # v5.6.1
         timeout-minutes: 30
         with:
           mode: simulation
