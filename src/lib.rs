@@ -1016,6 +1016,10 @@ impl ResolverImpl {
             return Ok(Some(resolved_path));
         }
 
+        // Subpaths always try the file first; for a bare package root the
+        // Node.js-compatible order is selected by `node_compat.file_first`.
+        let file_first = self.options.node_compat.file_first || specifier != package_name;
+
         // 1. let DIRS = NODE_MODULES_PATHS(START)
         // 2. for each DIR in DIRS:
         for module_name in &self.options.modules {
@@ -1075,9 +1079,6 @@ impl ResolverImpl {
                     return Ok(self.is_dir(&cached_path, ctx).then(|| cached_path.clone()));
                 }
 
-                // Subpaths always try the file first; for a bare package root the
-                // Node.js-compatible order is opt-in via `node_compat.file_first`.
-                let file_first = self.options.node_compat.file_first || specifier != package_name;
                 if file_first
                     && !specifier.ends_with('/')
                     && let Some(path) = self.load_as_file(&cached_path, tsconfig, ctx)?
@@ -1094,7 +1095,7 @@ impl ResolverImpl {
                     if let Some(path) = self.load_as_directory(&cached_path, tsconfig, ctx)? {
                         return Ok(Some(path));
                     }
-                // Still need to try to load the file in case there are path aliases.
+                // A non-directory path may still resolve as a file (e.g. via aliases).
                 } else if !file_first
                     && let Some(path) = self.load_as_file(&cached_path, tsconfig, ctx)?
                 {

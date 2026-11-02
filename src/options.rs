@@ -8,9 +8,9 @@ use crate::node_path::NodePath;
 
 /// Node.js loader compatibility switches.
 ///
-/// Both are enabled by default because `unrs-resolver` aims to match Node.js; disable
-/// them to get the plain `enhanced-resolve` behaviour. There is intentionally no
-/// `Default` impl: each resolver chooses its own default (oxc would default to `false`).
+/// `unrs-resolver` enables both by default; disable them to get the plain
+/// `enhanced-resolve` behaviour. There is intentionally no `Default` impl: each
+/// resolver chooses its own default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeCompat {
     /// Canonicalize the entry path (directory or importer file) before resolution when
@@ -182,13 +182,13 @@ pub struct ResolveOptions {
     /// Default `[]`
     pub roots: Vec<PathBuf>,
 
-    /// Opt into Node.js loader semantics that `enhanced-resolve` does not have.
+    /// Node.js loader compatibility switches that `enhanced-resolve` does not have.
     ///
     /// - [`NodeCompat::entry_symlinks`]: canonicalize the entry path when
     ///   [`ResolveOptions::symlinks`] is enabled.
     /// - [`NodeCompat::file_first`]: try `node_modules/X.js` before `node_modules/X/`.
     ///
-    /// Use [`NodeCompat::all`] to toggle both at once.
+    /// Both are enabled by default; use [`NodeCompat::all`] to toggle both at once.
     ///
     /// Default: both `true`.
     pub node_compat: NodeCompat,
