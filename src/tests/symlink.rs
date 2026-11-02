@@ -445,6 +445,24 @@ fn nested_monorepo_canonicalize_matches_os() {
     );
 }
 
+fn remove_test_link(path: &Path, directory: bool) -> io::Result<bool> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            if !metadata.file_type().is_symlink() {
+                return Ok(false);
+            }
+            if directory {
+                fs::remove_dir_all(path)?;
+            } else {
+                fs::remove_file(path)?;
+            }
+            Ok(true)
+        }
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(true),
+        Err(err) => Err(err),
+    }
+}
+
 #[cfg(not(target_family = "wasm"))]
 #[test]
 fn node_compat_entry_symlinks() {
@@ -455,14 +473,22 @@ fn node_compat_entry_symlinks() {
     let dir_target = root.join("store").join("real");
     let file_target = dir_target.join("app.js");
 
-    let _ = fs::remove_dir_all(&link);
-    let _ = fs::remove_file(&app_link);
+    if !remove_test_link(&link, true).unwrap_or(false) {
+        println!("Skipped node_compat_entry_symlinks: project/link exists and is not a symlink");
+        return;
+    }
+    if !remove_test_link(&app_link, false).unwrap_or(false) {
+        println!(
+            "Skipped node_compat_entry_symlinks: project/app-link.js exists and is not a symlink"
+        );
+        return;
+    }
     if let Err(err) = symlink(&dir_target, &link, FileType::Dir) {
         println!("Skipped node_compat_entry_symlinks: cannot create directory symlink: {err}");
         return;
     }
     if let Err(err) = symlink(&file_target, &app_link, FileType::File) {
-        let _ = fs::remove_dir_all(&link);
+        let _ = remove_test_link(&link, true);
         println!("Skipped node_compat_entry_symlinks: cannot create file symlink: {err}");
         return;
     }
@@ -487,6 +513,6 @@ fn node_compat_entry_symlinks() {
         Ok(lexical_bar)
     );
 
-    let _ = fs::remove_dir_all(&link);
-    let _ = fs::remove_file(&app_link);
+    let _ = remove_test_link(&link, true);
+    let _ = remove_test_link(&app_link, false);
 }
