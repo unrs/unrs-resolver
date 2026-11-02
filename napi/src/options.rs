@@ -162,7 +162,8 @@ pub struct NapiResolveOptions {
     /// Whether to apply Node.js loader semantics.
     ///
     /// Enabled by default; `false` opts out of both switches, or pass
-    /// `{ entrySymlinks?: boolean, fileFirst?: boolean }`; omitted object fields default to `true`.
+    /// `{ entrySymlinks?: boolean, fileFirst?: boolean }`; omitted object fields inherit the
+    /// resolver default (`true`).
     ///
     /// Default `true`.
     #[napi(ts_type = "boolean | NodeCompatOptions")]
