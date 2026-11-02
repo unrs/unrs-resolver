@@ -8,8 +8,8 @@ use crate::node_path::NodePath;
 
 /// Node.js loader compatibility switches.
 ///
-/// These are opt-in behaviours that `enhanced-resolve` does not implement by default.
-/// `unrs-resolver` enables both by default because it aims to match Node.js.
+/// Both are enabled by default because `unrs-resolver` aims to match Node.js; disable
+/// them to get the plain `enhanced-resolve` behaviour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeCompat {
     /// Canonicalize the entry path (directory or importer file) before resolution when

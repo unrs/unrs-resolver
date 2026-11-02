@@ -5,6 +5,8 @@ use napi_derive::napi;
 use regress::Regex;
 
 /// Node.js loader compatibility switches.
+///
+/// Both default to `true`; set `nodeCompat: false` to opt out entirely.
 #[derive(Debug, Clone, Copy)]
 #[napi(object)]
 pub struct NodeCompatOptions {
@@ -157,9 +159,9 @@ pub struct NapiResolveOptions {
     /// Default `true`
     pub symlinks: Option<bool>,
 
-    /// Opt into Node.js loader semantics.
+    /// Whether to apply Node.js loader semantics.
     ///
-    /// `true` enables both switches, `false` disables both, or pass
+    /// Enabled by default; `false` opts out of both switches, or pass
     /// `{ entrySymlinks?: boolean, fileFirst?: boolean }`; omitted object fields default to `true`.
     ///
     /// Default `true`.

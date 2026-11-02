@@ -228,7 +228,7 @@ See [index.d.ts](https://github.com/unrs/unrs-resolver/blob/main/napi/index.d.ts
 | restrictions                          | []                        | A list of resolve restrictions                                                                                                                            |
 | roots                                 | []                        | A list of root paths                                                                                                                                      |
 | symlinks                              | true                      | Whether to resolve symlinks to their symlinked location                                                                                                   |
-| nodeCompat                            | true                      | Opt into Node.js loader semantics: canonicalize the entry path and try `X.js` before `X/` for bare packages                                               |
+| nodeCompat                            | true                      | Node.js loader semantics (default on): canonicalize the entry path and try `X.js` before `X/` for bare packages; set `false` to opt out                               |
 | allowPackageExportsInDirectoryResolve | false                     | Allow `exports` field in `require('../directory')`. Not part of `enhanced-resolve`.                                                                       |
 
 ### TypeScript Configuration
