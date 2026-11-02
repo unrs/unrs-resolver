@@ -455,7 +455,9 @@ fn node_compat_entry_symlinks() {
         return;
     }
     // macOS exposes /var through a symlink; canonicalize the root so the expected
-    // paths match what the resolver returns.
+    // paths match what the resolver returns. On Windows canonicalize() adds the \\?\
+    // prefix, which the resolver does not return.
+    #[cfg(not(target_os = "windows"))]
     let base = base.canonicalize().unwrap_or(base);
 
     let setup = || -> io::Result<()> {
@@ -465,12 +467,10 @@ fn node_compat_entry_symlinks() {
         fs::create_dir_all(base.join("project/node_modules"))?;
         fs::write(base.join("project/node_modules/bar.js"), "")?;
         fs::write(base.join("store/real/app.js"), "")?;
-        symlink(Path::new("../store/real"), base.join("project/link"), FileType::Dir)?;
-        symlink(
-            Path::new("../store/real/app.js"),
-            base.join("project/app-link.js"),
-            FileType::File,
-        )?;
+        let dir_target = Path::new("..").join("store").join("real");
+        let file_target = dir_target.join("app.js");
+        symlink(&dir_target, base.join("project/link"), FileType::Dir)?;
+        symlink(&file_target, base.join("project/app-link.js"), FileType::File)?;
         Ok(())
     };
     if let Err(err) = setup() {
