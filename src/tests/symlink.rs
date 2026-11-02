@@ -445,10 +445,18 @@ fn nested_monorepo_canonicalize_matches_os() {
     );
 }
 
+#[cfg(not(target_family = "wasm"))]
 #[test]
 fn node_compat_entry_symlinks() {
     let base = std::env::temp_dir().join(format!("unrs-node-compat-{}", std::process::id()));
     let _ = fs::remove_dir_all(&base);
+    if let Err(err) = fs::create_dir_all(&base) {
+        println!("Skipped node_compat_entry_symlinks: cannot create temp dir: {err}");
+        return;
+    }
+    // macOS exposes /var through a symlink; canonicalize the root so the expected
+    // paths match what the resolver returns.
+    let base = base.canonicalize().unwrap_or(base);
 
     let setup = || -> io::Result<()> {
         fs::create_dir_all(base.join("store/real"))?;
