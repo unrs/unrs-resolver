@@ -230,6 +230,16 @@ export interface NapiResolveOptions {
    */
   symlinks?: boolean
   /**
+   * Whether to apply Node.js loader semantics.
+   *
+   * Enabled by default; `false` opts out of both switches, or pass
+   * `{ entrySymlinks?: boolean, preferFile?: boolean }` as a whitelist; omitted object fields
+   * default to `false`.
+   *
+   * Default `true`.
+   */
+  nodeCompat?: boolean | NodeCompatOptions
+  /**
    * Whether to read the `NODE_PATH` environment variable and append its entries to `modules`.
    *
    * `NODE_PATH` is a deprecated Node.js feature that is not part of ESM resolution.
@@ -262,6 +272,30 @@ export interface NapiResolveOptions {
    * Default: `false`
    */
   allowPackageExportsInDirectoryResolve?: boolean
+}
+
+/**
+ * Node.js loader compatibility switches.
+ *
+ * The object form is a whitelist: omitted switches default to `false`. When
+ * `nodeCompat` is absent or `true`, both are enabled.
+ */
+export interface NodeCompatOptions {
+  /**
+   * Canonicalize the entry path (directory or importer file) when `symlinks` is enabled.
+   *
+   * Default `false` in the object form (whitelist semantics).
+   */
+  entrySymlinks?: boolean
+  /**
+   * Prefer `node_modules/X.js` over `node_modules/X/` for a bare package root.
+   *
+   * When disabled, an existing `X/` directory is resolved without falling
+   * back to a sibling `X.js`.
+   *
+   * Default `false` in the object form (whitelist semantics).
+   */
+  preferFile?: boolean
 }
 
 export interface ResolveResult {

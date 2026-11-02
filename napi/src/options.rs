@@ -4,6 +4,27 @@ use napi::Either;
 use napi_derive::napi;
 use regress::Regex;
 
+/// Node.js loader compatibility switches.
+///
+/// The object form is a whitelist: omitted switches default to `false`. When
+/// `nodeCompat` is absent or `true`, both are enabled.
+#[derive(Debug, Clone, Copy)]
+#[napi(object)]
+pub struct NodeCompatOptions {
+    /// Canonicalize the entry path (directory or importer file) when `symlinks` is enabled.
+    ///
+    /// Default `false` in the object form (whitelist semantics).
+    pub entry_symlinks: Option<bool>,
+
+    /// Prefer `node_modules/X.js` over `node_modules/X/` for a bare package root.
+    ///
+    /// When disabled, an existing `X/` directory is resolved without falling
+    /// back to a sibling `X.js`.
+    ///
+    /// Default `false` in the object form (whitelist semantics).
+    pub prefer_file: Option<bool>,
+}
+
 /// Module Resolution Options
 ///
 /// Options are directly ported from [enhanced-resolve](https://github.com/webpack/enhanced-resolve#resolver-options).
@@ -141,6 +162,16 @@ pub struct NapiResolveOptions {
     ///
     /// Default `true`
     pub symlinks: Option<bool>,
+
+    /// Whether to apply Node.js loader semantics.
+    ///
+    /// Enabled by default; `false` opts out of both switches, or pass
+    /// `{ entrySymlinks?: boolean, preferFile?: boolean }` as a whitelist; omitted object fields
+    /// default to `false`.
+    ///
+    /// Default `true`.
+    #[napi(ts_type = "boolean | NodeCompatOptions")]
+    pub node_compat: Option<Either<bool, NodeCompatOptions>>,
 
     /// Whether to read the `NODE_PATH` environment variable and append its entries to `modules`.
     ///

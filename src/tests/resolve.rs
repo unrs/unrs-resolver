@@ -1,6 +1,6 @@
 //! <https://github.com/webpack/enhanced-resolve/blob/main/test/resolve.test.js>
 
-use crate::{Resolution, ResolveError, ResolveOptions, Resolver};
+use crate::{NodeCompat, Resolution, ResolveError, ResolveOptions, Resolver};
 
 #[test]
 fn resolve() {
@@ -162,6 +162,24 @@ fn prefer_file_over_dir() {
         ("one level package name", "bar", f.join("node_modules/bar.js")),
         ("scoped package name", "@foo/bar", f.join("node_modules/@foo/bar.js")),
         ("directory only", "only-dir", f.join("node_modules/only-dir/index.js")),
+    ];
+    for (comment, request, expected) in data {
+        let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());
+        assert_eq!(resolved_path, Ok(expected), "{comment} {request}");
+    }
+}
+
+#[test]
+fn node_compat_prefer_file_disabled() {
+    let f = super::fixture().join("prefer-file-over-dir");
+    let resolver = Resolver::new(ResolveOptions {
+        node_compat: NodeCompat { prefer_file: false, ..NodeCompat::all(true) },
+        ..ResolveOptions::default()
+    });
+    #[rustfmt::skip]
+    let data = [
+        ("one level package name", "bar", f.join("node_modules/bar/index.js")),
+        ("scoped package name", "@foo/bar", f.join("node_modules/@foo/bar/index.js")),
     ];
     for (comment, request, expected) in data {
         let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());

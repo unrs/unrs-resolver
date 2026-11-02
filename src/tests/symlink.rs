@@ -10,7 +10,7 @@ use super::fixture_root;
 use crate::PathUtil;
 #[cfg(target_os = "windows")]
 use crate::tests::windows::get_dos_device_path;
-use crate::{ResolveOptions, Resolver};
+use crate::{NodeCompat, ResolveOptions, Resolver};
 
 #[derive(Debug, Clone, Copy)]
 enum FileType {
@@ -443,4 +443,49 @@ fn nested_monorepo_canonicalize_matches_os() {
         resolve(&root.join("node_modules/dep/index.js")),
         root.join("node_modules/.pnpm/dep@2.0.0/node_modules/dep/index.js")
     );
+}
+
+#[test]
+fn node_compat_entry_symlinks() {
+    let root = super::fixture_root().join("node-compat");
+    let project = root.join("project");
+    let link = project.join("link");
+    let app_link = project.join("app-link.js");
+    let dir_target = root.join("store").join("real");
+    let file_target = dir_target.join("app.js");
+
+    let _ = fs::remove_dir_all(&link);
+    let _ = fs::remove_file(&app_link);
+    if let Err(err) = symlink(&dir_target, &link, FileType::Dir) {
+        println!("Skipped node_compat_entry_symlinks: cannot create directory symlink: {err}");
+        return;
+    }
+    if let Err(err) = symlink(&file_target, &app_link, FileType::File) {
+        let _ = fs::remove_dir_all(&link);
+        println!("Skipped node_compat_entry_symlinks: cannot create file symlink: {err}");
+        return;
+    }
+
+    let store_bar = root.join("store").join("node_modules").join("bar").join("index.js");
+    let lexical_bar = project.join("node_modules").join("bar.js");
+
+    let default = Resolver::default();
+    assert_eq!(default.resolve(&link, "bar").map(|r| r.full_path()), Ok(store_bar.clone()));
+    assert_eq!(default.resolve_file(&app_link, "bar").map(|r| r.full_path()), Ok(store_bar));
+
+    let no_entry_symlinks = Resolver::new(ResolveOptions {
+        node_compat: NodeCompat { entry_symlinks: false, ..NodeCompat::all(true) },
+        ..ResolveOptions::default()
+    });
+    assert_eq!(
+        no_entry_symlinks.resolve(&link, "bar").map(|r| r.full_path()),
+        Ok(lexical_bar.clone())
+    );
+    assert_eq!(
+        no_entry_symlinks.resolve_file(&app_link, "bar").map(|r| r.full_path()),
+        Ok(lexical_bar)
+    );
+
+    let _ = fs::remove_dir_all(&link);
+    let _ = fs::remove_file(&app_link);
 }

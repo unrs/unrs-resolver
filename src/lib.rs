@@ -89,8 +89,8 @@ pub use crate::{
     error::{JSONError, ResolveError, SpecifierError},
     file_system::{FileMetadata, FileSystem, FileSystemOs},
     options::{
-        Alias, AliasValue, EnforceExtension, ResolveOptions, Restriction, TsconfigDiscovery,
-        TsconfigOptions, TsconfigReferences,
+        Alias, AliasValue, EnforceExtension, NodeCompat, ResolveOptions, Restriction,
+        TsconfigDiscovery, TsconfigOptions, TsconfigReferences,
     },
     package_json::{
         ImportsExportsArray, ImportsExportsEntry, ImportsExportsKind, ImportsExportsMap,
@@ -263,15 +263,17 @@ impl ResolverImpl {
     }
 
     fn resolve_file_impl(&self, path: &Path, specifier: &str) -> Result<Resolution, ResolveError> {
-        let mut ctx = Ctx {
-            resolve_file: true,
-            package_map_parent: Some(path.to_path_buf()),
-            ..Ctx::default()
+        let path = if self.options.node_compat.entry_symlinks {
+            self.load_realpath(&self.cache.value(path))?
+        } else {
+            path.to_path_buf()
         };
+        let mut ctx =
+            Ctx { resolve_file: true, package_map_parent: Some(path.clone()), ..Ctx::default() };
         let Some(dir) = path.parent() else {
-            return Err(Self::invalid_resolve_file_path_error(path));
+            return Err(Self::invalid_resolve_file_path_error(&path));
         };
-        let tsconfig = self.find_tsconfig(path)?;
+        let tsconfig = self.find_tsconfig(&path)?;
         self.resolve_tracing(dir, specifier, tsconfig.as_deref(), &mut ctx)
     }
 
@@ -342,7 +344,11 @@ impl ResolverImpl {
     ) -> Result<Resolution, ResolveError> {
         ctx.with_fully_specified(self.options.fully_specified);
 
-        let cached_path = self.load_realpath(&self.cache.value(path))?;
+        let cached_path = if self.options.node_compat.entry_symlinks {
+            self.load_realpath(&self.cache.value(path))?
+        } else {
+            path.to_path_buf()
+        };
         let cached_path =
             self.require(&self.cache.value(&cached_path), specifier, tsconfig, ctx)?;
 
@@ -1010,6 +1016,10 @@ impl ResolverImpl {
             return Ok(Some(resolved_path));
         }
 
+        // Subpaths always try the file first; for a bare package root the
+        // Node.js-compatible order is selected by `node_compat.prefer_file`.
+        let prefer_file = self.options.node_compat.prefer_file || specifier != package_name;
+
         // 1. let DIRS = NODE_MODULES_PATHS(START)
         // 2. for each DIR in DIRS:
         for module_name in &self.options.modules {
@@ -1069,10 +1079,8 @@ impl ResolverImpl {
                     return Ok(self.is_dir(&cached_path, ctx).then(|| cached_path.clone()));
                 }
 
-                // `is_file` could be false because no extensions are considered yet,
-                // so we need to try `load_as_file` first when `specifier` does not end
-                // with a slash, which indicates a directory instead.
-                if !specifier.ends_with('/')
+                if prefer_file
+                    && !specifier.ends_with('/')
                     && let Some(path) = self.load_as_file(&cached_path, tsconfig, ctx)?
                 {
                     return Ok(Some(path));
@@ -1087,6 +1095,11 @@ impl ResolverImpl {
                     if let Some(path) = self.load_as_directory(&cached_path, tsconfig, ctx)? {
                         return Ok(Some(path));
                     }
+                // A non-directory path may still resolve as a file (e.g. via aliases).
+                } else if !prefer_file
+                    && let Some(path) = self.load_as_file(&cached_path, tsconfig, ctx)?
+                {
+                    return Ok(Some(path));
                 }
             }
         }
@@ -1378,7 +1391,7 @@ impl ResolverImpl {
                 return Ok(Some(path));
             }
         }
-        // Bail if path is module directory such as `ipaddr.js`
+        // Bail if path is a module directory such as `ipaddr.js`
         if !self.is_file(cached_path, ctx) {
             ctx.with_fully_specified(false);
             return Ok(None);
