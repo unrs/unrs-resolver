@@ -250,7 +250,6 @@ impl ResolverFactory {
     fn normalize_options(op: NapiResolveOptions) -> napi::Result<ResolveOptions> {
         let default = ResolveOptions::default();
         // merging options
-        let default_node_compat = default.node_compat;
         Ok(ResolveOptions {
             cwd: None,
             tsconfig: op
@@ -352,10 +351,8 @@ impl ResolverFactory {
                 .map(|node_compat| match node_compat {
                     Either::A(all) => NodeCompat::all(all),
                     Either::B(options) => NodeCompat {
-                        entry_symlinks: options
-                            .entry_symlinks
-                            .unwrap_or(default_node_compat.entry_symlinks),
-                        file_first: options.file_first.unwrap_or(default_node_compat.file_first),
+                        entry_symlinks: options.entry_symlinks.unwrap_or(false),
+                        file_first: options.file_first.unwrap_or(false),
                     },
                 })
                 .unwrap_or(default.node_compat),
