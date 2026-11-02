@@ -1095,8 +1095,12 @@ impl ResolverImpl {
                     if let Some(path) = self.load_as_directory(&cached_path, tsconfig, ctx)? {
                         return Ok(Some(path));
                     }
-                // A non-directory path may still resolve as a file (e.g. via aliases).
-                } else if !file_first
+                }
+
+                // Directory-first still falls back to the file when the directory has no
+                // resolvable entry (or does not exist).
+                if !file_first
+                    && !specifier.ends_with('/')
                     && let Some(path) = self.load_as_file(&cached_path, tsconfig, ctx)?
                 {
                     return Ok(Some(path));

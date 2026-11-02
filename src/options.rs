@@ -8,9 +8,9 @@ use crate::node_path::NodePath;
 
 /// Node.js loader compatibility switches.
 ///
-/// `unrs-resolver` enables both by default; disable them to get the plain
-/// `enhanced-resolve` behaviour. There is intentionally no `Default` impl: each
-/// resolver chooses its own default.
+/// `unrs-resolver` enables both by default; disable them to opt out of these
+/// Node.js behaviours. There is intentionally no `Default` impl: each resolver
+/// chooses its own default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeCompat {
     /// Canonicalize the entry path (directory or importer file) before resolution when
@@ -23,6 +23,8 @@ pub struct NodeCompat {
     /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
     ///
     /// This matches the CommonJS `LOAD_AS_FILE` before `LOAD_AS_DIRECTORY` order.
+    /// When disabled the directory is tried first, but the file is still used as a
+    /// fallback if the directory has no resolvable entry.
     pub file_first: bool,
 }
 

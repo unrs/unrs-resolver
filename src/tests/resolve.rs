@@ -162,6 +162,7 @@ fn prefer_file_over_dir() {
         ("one level package name", "bar", f.join("node_modules/bar.js")),
         ("scoped package name", "@foo/bar", f.join("node_modules/@foo/bar.js")),
         ("directory only", "only-dir", f.join("node_modules/only-dir/index.js")),
+        ("incomplete directory", "incomplete", f.join("node_modules/incomplete.js")),
     ];
     for (comment, request, expected) in data {
         let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());
@@ -180,6 +181,7 @@ fn node_compat_file_first_disabled() {
     let data = [
         ("one level package name", "bar", f.join("node_modules/bar/index.js")),
         ("scoped package name", "@foo/bar", f.join("node_modules/@foo/bar/index.js")),
+        ("incomplete directory", "incomplete", f.join("node_modules/incomplete.js")),
     ];
     for (comment, request, expected) in data {
         let resolved_path = resolver.resolve(&f, request).map(|r| r.full_path());
