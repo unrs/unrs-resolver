@@ -445,7 +445,6 @@ fn nested_monorepo_canonicalize_matches_os() {
     );
 }
 
-#[cfg(not(target_family = "wasm"))]
 #[test]
 fn node_compat_entry_symlinks() {
     let root = super::fixture_root().join("node-compat");
