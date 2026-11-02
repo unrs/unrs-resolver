@@ -9,7 +9,8 @@ use crate::node_path::NodePath;
 /// Node.js loader compatibility switches.
 ///
 /// Both are enabled by default because `unrs-resolver` aims to match Node.js; disable
-/// them to get the plain `enhanced-resolve` behaviour.
+/// them to get the plain `enhanced-resolve` behaviour. There is intentionally no
+/// `Default` impl: each resolver chooses its own default (oxc would default to `false`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodeCompat {
     /// Canonicalize the entry path (directory or importer file) before resolution when
@@ -30,12 +31,6 @@ impl NodeCompat {
     #[must_use]
     pub const fn all(enabled: bool) -> Self {
         Self { entry_symlinks: enabled, file_first: enabled }
-    }
-}
-
-impl Default for NodeCompat {
-    fn default() -> Self {
-        Self::all(true)
     }
 }
 
@@ -617,7 +612,7 @@ impl Default for ResolveOptions {
             restrictions: vec![],
             roots: vec![],
             symlinks: true,
-            node_compat: NodeCompat::default(),
+            node_compat: NodeCompat::all(true),
             node_path: true,
             builtin_modules: false,
             module_type: false,
@@ -691,7 +686,7 @@ impl fmt::Display for ResolveOptions {
         if self.symlinks {
             write!(f, "symlinks:{:?},", self.symlinks)?;
         }
-        if self.node_compat != NodeCompat::default() {
+        if self.node_compat != NodeCompat::all(true) {
             write!(f, "node_compat:{},", self.node_compat)?;
         }
         if !self.node_path {
@@ -789,7 +784,7 @@ mod test {
             restrictions: vec![],
             roots: vec![],
             symlinks: false,
-            node_compat: NodeCompat::default(),
+            node_compat: NodeCompat::all(true),
             tsconfig: None,
             module_type: false,
             allow_package_exports_in_directory_resolve: false,

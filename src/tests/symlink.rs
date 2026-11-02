@@ -489,7 +489,7 @@ fn node_compat_entry_symlinks() {
     assert_eq!(default.resolve_file(&app, "bar").map(|r| r.full_path()), Ok(store_bar));
 
     let no_entry_symlinks = Resolver::new(ResolveOptions {
-        node_compat: NodeCompat { entry_symlinks: false, ..NodeCompat::default() },
+        node_compat: NodeCompat { entry_symlinks: false, ..NodeCompat::all(true) },
         ..ResolveOptions::default()
     });
     assert_eq!(
