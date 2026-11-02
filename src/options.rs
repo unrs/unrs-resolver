@@ -6,6 +6,45 @@ use std::{
 
 use crate::node_path::NodePath;
 
+/// Node.js loader compatibility switches.
+///
+/// These are opt-in behaviours that `enhanced-resolve` does not implement by default.
+/// `unrs-resolver` enables both by default because it aims to match Node.js.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NodeCompat {
+    /// Canonicalize the entry path (directory or importer file) before resolution when
+    /// [`ResolveOptions::symlinks`] is enabled.
+    ///
+    /// This matches the Node.js loader, which realpaths the importing module unless
+    /// `--preserve-symlinks` is set.
+    pub entry_symlinks: bool,
+
+    /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
+    ///
+    /// This matches the CommonJS `LOAD_AS_FILE` before `LOAD_AS_DIRECTORY` order.
+    pub file_first: bool,
+}
+
+impl NodeCompat {
+    /// Enable or disable both switches at once.
+    #[must_use]
+    pub const fn all(enabled: bool) -> Self {
+        Self { entry_symlinks: enabled, file_first: enabled }
+    }
+}
+
+impl Default for NodeCompat {
+    fn default() -> Self {
+        Self::all(true)
+    }
+}
+
+impl fmt::Display for NodeCompat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "entry_symlinks:{},file_first:{}", self.entry_symlinks, self.file_first)
+    }
+}
+
 /// Module Resolution Options
 ///
 /// Options are directly ported from [enhanced-resolve](https://github.com/webpack/enhanced-resolve#resolver-options).
@@ -147,6 +186,17 @@ pub struct ResolveOptions {
     ///
     /// Default `[]`
     pub roots: Vec<PathBuf>,
+
+    /// Opt into Node.js loader semantics that `enhanced-resolve` does not have.
+    ///
+    /// - [`NodeCompat::entry_symlinks`]: canonicalize the entry path when
+    ///   [`ResolveOptions::symlinks`] is enabled.
+    /// - [`NodeCompat::file_first`]: try `node_modules/X.js` before `node_modules/X/`.
+    ///
+    /// Use [`NodeCompat::all`] to toggle both at once.
+    ///
+    /// Default: both `true`.
+    pub node_compat: NodeCompat,
 
     /// Whether to resolve symlinks to their symlinked location, if possible.
     /// When enabled, symlinked resources are resolved to their real path, not their symlinked location.
@@ -567,6 +617,7 @@ impl Default for ResolveOptions {
             restrictions: vec![],
             roots: vec![],
             symlinks: true,
+            node_compat: NodeCompat::default(),
             node_path: true,
             builtin_modules: false,
             module_type: false,
@@ -640,6 +691,9 @@ impl fmt::Display for ResolveOptions {
         if self.symlinks {
             write!(f, "symlinks:{:?},", self.symlinks)?;
         }
+        if self.node_compat != NodeCompat::default() {
+            write!(f, "node_compat:{},", self.node_compat)?;
+        }
         if !self.node_path {
             write!(f, "node_path:{:?},", self.node_path)?;
         }
@@ -662,7 +716,7 @@ mod test {
     use std::path::PathBuf;
 
     use super::{
-        AliasValue, EnforceExtension, ResolveOptions, Restriction, TsconfigDiscovery,
+        AliasValue, EnforceExtension, NodeCompat, ResolveOptions, Restriction, TsconfigDiscovery,
         TsconfigOptions, TsconfigReferences,
     };
 
@@ -735,6 +789,7 @@ mod test {
             restrictions: vec![],
             roots: vec![],
             symlinks: false,
+            node_compat: NodeCompat::default(),
             tsconfig: None,
             module_type: false,
             allow_package_exports_in_directory_resolve: false,

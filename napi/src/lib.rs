@@ -13,7 +13,8 @@ use std::{
 use napi::{Either, Task, bindgen_prelude::AsyncTask};
 use napi_derive::napi;
 use unrs_resolver::{
-    Resolution, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
+    NodeCompat, Resolution, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery,
+    TsconfigOptions,
 };
 
 use self::options::{NapiResolveOptions, StrOrStrList};
@@ -345,6 +346,16 @@ impl ResolverFactory {
                 .map(|roots| roots.into_iter().map(PathBuf::from).collect::<Vec<_>>())
                 .unwrap_or(default.roots),
             symlinks: op.symlinks.unwrap_or(default.symlinks),
+            node_compat: op
+                .node_compat
+                .map(|node_compat| match node_compat {
+                    Either::A(all) => NodeCompat::all(all),
+                    Either::B(options) => NodeCompat {
+                        entry_symlinks: options.entry_symlinks.unwrap_or(true),
+                        file_first: options.file_first.unwrap_or(true),
+                    },
+                })
+                .unwrap_or(default.node_compat),
             node_path: op.node_path.unwrap_or(default.node_path),
             builtin_modules: op.builtin_modules.unwrap_or(default.builtin_modules),
             module_type: op.module_type.unwrap_or(default.module_type),

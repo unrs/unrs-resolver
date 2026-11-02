@@ -10,7 +10,7 @@ use super::fixture_root;
 use crate::PathUtil;
 #[cfg(target_os = "windows")]
 use crate::tests::windows::get_dos_device_path;
-use crate::{ResolveOptions, Resolver};
+use crate::{NodeCompat, ResolveOptions, Resolver};
 
 #[derive(Debug, Clone, Copy)]
 enum FileType {
@@ -443,4 +443,52 @@ fn nested_monorepo_canonicalize_matches_os() {
         resolve(&root.join("node_modules/dep/index.js")),
         root.join("node_modules/.pnpm/dep@2.0.0/node_modules/dep/index.js")
     );
+}
+
+#[test]
+fn node_compat_entry_symlinks() {
+    let base = std::env::temp_dir().join(format!("unrs-node-compat-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+
+    let setup = || -> io::Result<()> {
+        fs::create_dir_all(base.join("store/real"))?;
+        fs::create_dir_all(base.join("store/node_modules/bar"))?;
+        fs::write(base.join("store/node_modules/bar/index.js"), "")?;
+        fs::create_dir_all(base.join("project/node_modules"))?;
+        fs::write(base.join("project/node_modules/bar.js"), "")?;
+        fs::write(base.join("store/real/app.js"), "")?;
+        symlink(Path::new("../store/real"), base.join("project/link"), FileType::Dir)?;
+        symlink(
+            Path::new("../store/real/app.js"),
+            base.join("project/app-link.js"),
+            FileType::File,
+        )?;
+        Ok(())
+    };
+    if let Err(err) = setup() {
+        println!("Skipped node_compat_entry_symlinks: cannot create symlinks: {err}");
+        let _ = fs::remove_dir_all(&base);
+        return;
+    }
+
+    let link = base.join("project/link");
+    let app = base.join("project/app-link.js");
+    let store_bar = base.join("store/node_modules/bar/index.js");
+    let lexical_bar = base.join("project/node_modules/bar.js");
+
+    let default = Resolver::default();
+    assert_eq!(default.resolve(&link, "bar").map(|r| r.full_path()), Ok(store_bar.clone()));
+    assert_eq!(default.resolve_file(&app, "bar").map(|r| r.full_path()), Ok(store_bar));
+
+    let no_entry_symlinks = Resolver::new(ResolveOptions {
+        node_compat: NodeCompat { entry_symlinks: false, ..NodeCompat::default() },
+        ..ResolveOptions::default()
+    });
+    assert_eq!(
+        no_entry_symlinks.resolve(&link, "bar").map(|r| r.full_path()),
+        Ok(lexical_bar.clone())
+    );
+    assert_eq!(no_entry_symlinks.resolve_file(&app, "bar").map(|r| r.full_path()), Ok(lexical_bar));
+
+    let _ = fs::remove_dir_all(&base);
 }

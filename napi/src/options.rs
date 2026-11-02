@@ -4,6 +4,21 @@ use napi::Either;
 use napi_derive::napi;
 use regress::Regex;
 
+/// Node.js loader compatibility switches.
+#[derive(Debug, Clone, Copy)]
+#[napi(object)]
+pub struct NodeCompatOptions {
+    /// Canonicalize the entry path (directory or importer file) when `symlinks` is enabled.
+    ///
+    /// Default `true`.
+    pub entry_symlinks: Option<bool>,
+
+    /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
+    ///
+    /// Default `true`.
+    pub file_first: Option<bool>,
+}
+
 /// Module Resolution Options
 ///
 /// Options are directly ported from [enhanced-resolve](https://github.com/webpack/enhanced-resolve#resolver-options).
@@ -141,6 +156,15 @@ pub struct NapiResolveOptions {
     ///
     /// Default `true`
     pub symlinks: Option<bool>,
+
+    /// Opt into Node.js loader semantics.
+    ///
+    /// `true` enables both switches, `false` disables both, or pass
+    /// `{ entrySymlinks?: boolean, fileFirst?: boolean }`; omitted object fields default to `true`.
+    ///
+    /// Default `true`.
+    #[napi(ts_type = "boolean | NodeCompatOptions")]
+    pub node_compat: Option<Either<bool, NodeCompatOptions>>,
 
     /// Whether to read the `NODE_PATH` environment variable and append its entries to `modules`.
     ///
