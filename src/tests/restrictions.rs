@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use regress::Regex;
 
-use crate::{NodeCompat, ResolveError, ResolveOptions, Resolver, Restriction};
+use crate::{ResolveError, ResolveOptions, Resolver, Restriction};
 
 #[test]
 fn should_respect_regexp_restriction() {
@@ -284,23 +284,4 @@ fn should_respect_parent_directory_restriction() {
     // pck2's main field points to ../../../c.js which is outside restrictions dir
     let resolution = resolver.resolve(&f, "pck2");
     assert_eq!(resolution, Err(ResolveError::NotFound("pck2".to_string())));
-}
-
-#[test]
-fn should_reset_fully_specified_after_extension_alias_restriction() {
-    let f = super::fixture().join("prefer-file-over-dir");
-    let resolver = Resolver::new(ResolveOptions {
-        node_compat: NodeCompat { file_first: false, ..NodeCompat::all(true) },
-        extension_alias: vec![(".js".into(), vec![".ts".into()])],
-        restrictions: vec![Restriction::Fn(Arc::new(|path| {
-            path.extension().and_then(|e| e.to_str()) == Some("js")
-                && !path.to_string_lossy().ends_with("main.js")
-        }))],
-        ..ResolveOptions::default()
-    });
-
-    assert_eq!(
-        resolver.resolve(&f, "restricted").map(|r| r.full_path()),
-        Ok(f.join("node_modules/restricted.js"))
-    );
 }

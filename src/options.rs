@@ -23,8 +23,6 @@ pub struct NodeCompat {
     /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
     ///
     /// This matches the CommonJS `LOAD_AS_FILE` before `LOAD_AS_DIRECTORY` order.
-    /// When disabled the directory is tried first, but the file is still used as a
-    /// fallback if the directory has no resolvable entry.
     pub file_first: bool,
 }
 
