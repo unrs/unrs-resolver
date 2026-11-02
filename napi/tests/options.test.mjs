@@ -75,9 +75,6 @@ describe("nodeCompat", () => {
     assert.equal(resolveBar({}), normalizePath(index));
     assert.equal(resolveBar({ entrySymlinks: true }), normalizePath(index));
     assert.equal(resolveBar({ fileFirst: true }), normalizePath(file));
-    assert.equal(
-      resolveBar({ entrySymlinks: true, fileFirst: false }),
-      normalizePath(index),
-    );
+    assert.equal(resolveBar({ entrySymlinks: true, fileFirst: false }), normalizePath(index));
   });
 });
