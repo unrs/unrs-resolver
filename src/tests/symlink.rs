@@ -448,43 +448,31 @@ fn nested_monorepo_canonicalize_matches_os() {
 #[cfg(not(any(target_family = "wasm", target_os = "windows")))]
 #[test]
 fn node_compat_entry_symlinks() {
-    let base = std::env::temp_dir().join(format!("unrs-node-compat-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&base);
-    if let Err(err) = fs::create_dir_all(&base) {
-        println!("Skipped node_compat_entry_symlinks: cannot create temp dir: {err}");
+    let root = super::fixture_root().join("node-compat");
+    let project = root.join("project");
+    let link = project.join("link");
+    let app_link = project.join("app-link.js");
+    let dir_target = root.join("store").join("real");
+    let file_target = dir_target.join("app.js");
+
+    let _ = fs::remove_file(&link);
+    let _ = fs::remove_file(&app_link);
+    if let Err(err) = symlink(&dir_target, &link, FileType::Dir) {
+        println!("Skipped node_compat_entry_symlinks: cannot create directory symlink: {err}");
         return;
     }
-    // macOS exposes /var through a symlink; canonicalize the root so the expected
-    // paths match what the resolver returns.
-    let base = base.canonicalize().unwrap_or(base);
-
-    let setup = || -> io::Result<()> {
-        fs::create_dir_all(base.join("store/real"))?;
-        fs::create_dir_all(base.join("store/node_modules/bar"))?;
-        fs::write(base.join("store/node_modules/bar/index.js"), "")?;
-        fs::create_dir_all(base.join("project/node_modules"))?;
-        fs::write(base.join("project/node_modules/bar.js"), "")?;
-        fs::write(base.join("store/real/app.js"), "")?;
-        let dir_target = Path::new("..").join("store").join("real");
-        let file_target = dir_target.join("app.js");
-        symlink(&dir_target, base.join("project/link"), FileType::Dir)?;
-        symlink(&file_target, base.join("project/app-link.js"), FileType::File)?;
-        Ok(())
-    };
-    if let Err(err) = setup() {
-        println!("Skipped node_compat_entry_symlinks: cannot create symlinks: {err}");
-        let _ = fs::remove_dir_all(&base);
+    if let Err(err) = symlink(&file_target, &app_link, FileType::File) {
+        let _ = fs::remove_file(&link);
+        println!("Skipped node_compat_entry_symlinks: cannot create file symlink: {err}");
         return;
     }
 
-    let link = base.join("project/link");
-    let app = base.join("project/app-link.js");
-    let store_bar = base.join("store").join("node_modules").join("bar").join("index.js");
-    let lexical_bar = base.join("project").join("node_modules").join("bar.js");
+    let store_bar = root.join("store").join("node_modules").join("bar").join("index.js");
+    let lexical_bar = project.join("node_modules").join("bar.js");
 
     let default = Resolver::default();
     assert_eq!(default.resolve(&link, "bar").map(|r| r.full_path()), Ok(store_bar.clone()));
-    assert_eq!(default.resolve_file(&app, "bar").map(|r| r.full_path()), Ok(store_bar));
+    assert_eq!(default.resolve_file(&app_link, "bar").map(|r| r.full_path()), Ok(store_bar));
 
     let no_entry_symlinks = Resolver::new(ResolveOptions {
         node_compat: NodeCompat { entry_symlinks: false, ..NodeCompat::all(true) },
@@ -494,7 +482,11 @@ fn node_compat_entry_symlinks() {
         no_entry_symlinks.resolve(&link, "bar").map(|r| r.full_path()),
         Ok(lexical_bar.clone())
     );
-    assert_eq!(no_entry_symlinks.resolve_file(&app, "bar").map(|r| r.full_path()), Ok(lexical_bar));
+    assert_eq!(
+        no_entry_symlinks.resolve_file(&app_link, "bar").map(|r| r.full_path()),
+        Ok(lexical_bar)
+    );
 
-    let _ = fs::remove_dir_all(&base);
+    let _ = fs::remove_file(&link);
+    let _ = fs::remove_file(&app_link);
 }
