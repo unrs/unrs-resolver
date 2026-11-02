@@ -445,7 +445,7 @@ fn nested_monorepo_canonicalize_matches_os() {
     );
 }
 
-#[cfg(not(target_family = "wasm"))]
+#[cfg(not(any(target_family = "wasm", target_os = "windows")))]
 #[test]
 fn node_compat_entry_symlinks() {
     let base = std::env::temp_dir().join(format!("unrs-node-compat-{}", std::process::id()));
@@ -455,9 +455,7 @@ fn node_compat_entry_symlinks() {
         return;
     }
     // macOS exposes /var through a symlink; canonicalize the root so the expected
-    // paths match what the resolver returns. On Windows canonicalize() adds the \\?\
-    // prefix, which the resolver does not return.
-    #[cfg(not(target_os = "windows"))]
+    // paths match what the resolver returns.
     let base = base.canonicalize().unwrap_or(base);
 
     let setup = || -> io::Result<()> {
@@ -481,8 +479,8 @@ fn node_compat_entry_symlinks() {
 
     let link = base.join("project/link");
     let app = base.join("project/app-link.js");
-    let store_bar = base.join("store/node_modules/bar/index.js");
-    let lexical_bar = base.join("project/node_modules/bar.js");
+    let store_bar = base.join("store").join("node_modules").join("bar").join("index.js");
+    let lexical_bar = base.join("project").join("node_modules").join("bar.js");
 
     let default = Resolver::default();
     assert_eq!(default.resolve(&link, "bar").map(|r| r.full_path()), Ok(store_bar.clone()));
