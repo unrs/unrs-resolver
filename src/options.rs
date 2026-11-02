@@ -20,23 +20,26 @@ pub struct NodeCompat {
     /// `--preserve-symlinks` is set.
     pub entry_symlinks: bool,
 
-    /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
+    /// Prefer `node_modules/X.js` over `node_modules/X/` for a bare package root.
+    ///
+    /// When disabled, an existing `X/` directory is resolved without falling
+    /// back to a sibling `X.js`.
     ///
     /// This matches the CommonJS `LOAD_AS_FILE` before `LOAD_AS_DIRECTORY` order.
-    pub file_first: bool,
+    pub prefer_file: bool,
 }
 
 impl NodeCompat {
     /// Enable or disable both switches at once.
     #[must_use]
     pub const fn all(enabled: bool) -> Self {
-        Self { entry_symlinks: enabled, file_first: enabled }
+        Self { entry_symlinks: enabled, prefer_file: enabled }
     }
 }
 
 impl fmt::Display for NodeCompat {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "entry_symlinks:{},file_first:{}", self.entry_symlinks, self.file_first)
+        write!(f, "entry_symlinks:{},prefer_file:{}", self.entry_symlinks, self.prefer_file)
     }
 }
 
@@ -186,7 +189,7 @@ pub struct ResolveOptions {
     ///
     /// - [`NodeCompat::entry_symlinks`]: canonicalize the entry path when
     ///   [`ResolveOptions::symlinks`] is enabled.
-    /// - [`NodeCompat::file_first`]: try `node_modules/X.js` before `node_modules/X/`.
+    /// - [`NodeCompat::prefer_file`]: try `node_modules/X.js` before `node_modules/X/`.
     ///
     /// Both are enabled by default; use [`NodeCompat::all`] to toggle both at once.
     ///

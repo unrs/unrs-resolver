@@ -352,7 +352,7 @@ impl ResolverFactory {
                     Either::A(all) => NodeCompat::all(all),
                     Either::B(options) => NodeCompat {
                         entry_symlinks: options.entry_symlinks.unwrap_or(false),
-                        file_first: options.file_first.unwrap_or(false),
+                        prefer_file: options.prefer_file.unwrap_or(false),
                     },
                 })
                 .unwrap_or(default.node_compat),

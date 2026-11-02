@@ -231,7 +231,7 @@ See [index.d.ts](https://github.com/unrs/unrs-resolver/blob/main/napi/index.d.ts
 | nodeCompat                            | true                      | Node.js loader semantics (default on): canonicalize the entry path and try `X.js` before `X/`; `false` opts out, object form whitelists switches          |
 | allowPackageExportsInDirectoryResolve | false                     | Allow `exports` field in `require('../directory')`. Not part of `enhanced-resolve`.                                                                       |
 
-`nodeCompat` also accepts an object, `{ entrySymlinks?: boolean, fileFirst?: boolean }`. The object form is a whitelist: omitted switches default to `false`; `true`/`false` enable or disable both. `nodeCompat` is a `unrs-resolver` extension and is not part of `enhanced-resolve`.
+`nodeCompat` also accepts an object, `{ entrySymlinks?: boolean, preferFile?: boolean }`. The object form is a whitelist: omitted switches default to `false`; `true`/`false` enable or disable both. `nodeCompat` is a `unrs-resolver` extension and is not part of `enhanced-resolve`.
 
 ### TypeScript Configuration
 

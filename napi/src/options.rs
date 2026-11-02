@@ -16,10 +16,13 @@ pub struct NodeCompatOptions {
     /// Default `false` in the object form (whitelist semantics).
     pub entry_symlinks: Option<bool>,
 
-    /// Try `node_modules/X.js` before `node_modules/X/` for a bare package root.
+    /// Prefer `node_modules/X.js` over `node_modules/X/` for a bare package root.
+    ///
+    /// When disabled, an existing `X/` directory is resolved without falling
+    /// back to a sibling `X.js`.
     ///
     /// Default `false` in the object form (whitelist semantics).
-    pub file_first: Option<bool>,
+    pub prefer_file: Option<bool>,
 }
 
 /// Module Resolution Options
@@ -163,7 +166,7 @@ pub struct NapiResolveOptions {
     /// Whether to apply Node.js loader semantics.
     ///
     /// Enabled by default; `false` opts out of both switches, or pass
-    /// `{ entrySymlinks?: boolean, fileFirst?: boolean }` as a whitelist; omitted object fields
+    /// `{ entrySymlinks?: boolean, preferFile?: boolean }` as a whitelist; omitted object fields
     /// default to `false`.
     ///
     /// Default `true`.

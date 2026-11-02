@@ -170,10 +170,10 @@ fn prefer_file_over_dir() {
 }
 
 #[test]
-fn node_compat_file_first_disabled() {
+fn node_compat_prefer_file_disabled() {
     let f = super::fixture().join("prefer-file-over-dir");
     let resolver = Resolver::new(ResolveOptions {
-        node_compat: NodeCompat { file_first: false, ..NodeCompat::all(true) },
+        node_compat: NodeCompat { prefer_file: false, ..NodeCompat::all(true) },
         ..ResolveOptions::default()
     });
     #[rustfmt::skip]

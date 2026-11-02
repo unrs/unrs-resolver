@@ -74,7 +74,7 @@ describe("nodeCompat", () => {
   it("should treat the object form as a whitelist", () => {
     assert.equal(resolveBar({}), normalizePath(index));
     assert.equal(resolveBar({ entrySymlinks: true }), normalizePath(index));
-    assert.equal(resolveBar({ fileFirst: true }), normalizePath(file));
-    assert.equal(resolveBar({ entrySymlinks: true, fileFirst: false }), normalizePath(index));
+    assert.equal(resolveBar({ preferFile: true }), normalizePath(file));
+    assert.equal(resolveBar({ entrySymlinks: true, preferFile: false }), normalizePath(index));
   });
 });
