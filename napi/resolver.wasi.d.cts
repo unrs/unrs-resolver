@@ -277,8 +277,8 @@ export interface NapiResolveOptions {
 /**
  * Node.js loader compatibility switches.
  *
- * Both default to `true`; set `nodeCompat: false` to opt out entirely, or use the object
- * form to whitelist the switches you want (omitted fields default to `false`).
+ * The object form is a whitelist: omitted switches default to `false`. When
+ * `nodeCompat` is absent or `true`, both are enabled.
  */
 export interface NodeCompatOptions {
   /**
