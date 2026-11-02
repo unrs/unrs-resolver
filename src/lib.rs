@@ -1395,11 +1395,10 @@ impl ResolverImpl {
                 return Ok(Some(path));
             }
         }
-        // Bail if path is module directory such as `ipaddr.js`
-        if !self.is_file(cached_path, ctx) {
+        // Bail if path is a module directory such as `ipaddr.js`, or if the
+        // original file is restricted.
+        if !self.is_file(cached_path, ctx) || !self.check_restrictions(cached_path.path()) {
             ctx.with_fully_specified(false);
-            return Ok(None);
-        } else if !self.check_restrictions(cached_path.path()) {
             return Ok(None);
         }
         // Create a meaningful error message.
