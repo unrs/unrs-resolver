@@ -455,14 +455,14 @@ fn node_compat_entry_symlinks() {
     let dir_target = root.join("store").join("real");
     let file_target = dir_target.join("app.js");
 
-    let _ = fs::remove_file(&link);
+    let _ = fs::remove_dir_all(&link);
     let _ = fs::remove_file(&app_link);
     if let Err(err) = symlink(&dir_target, &link, FileType::Dir) {
         println!("Skipped node_compat_entry_symlinks: cannot create directory symlink: {err}");
         return;
     }
     if let Err(err) = symlink(&file_target, &app_link, FileType::File) {
-        let _ = fs::remove_file(&link);
+        let _ = fs::remove_dir_all(&link);
         println!("Skipped node_compat_entry_symlinks: cannot create file symlink: {err}");
         return;
     }
@@ -487,6 +487,6 @@ fn node_compat_entry_symlinks() {
         Ok(lexical_bar)
     );
 
-    let _ = fs::remove_file(&link);
+    let _ = fs::remove_dir_all(&link);
     let _ = fs::remove_file(&app_link);
 }
