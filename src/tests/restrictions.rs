@@ -421,6 +421,9 @@ mod path_boundaries {
 ///
 /// Ported from enhanced-resolve `restrictions > with symlinks`,
 /// <https://github.com/webpack/enhanced-resolve/pull/595>.
+///
+/// These need real symlinks and a temporary directory, neither of which exists under wasm.
+#[cfg(not(target_family = "wasm"))]
 mod escaping_the_restriction {
     use std::{
         fs, io,
@@ -437,11 +440,6 @@ mod escaping_the_restriction {
         #[cfg(target_os = "windows")]
         {
             std::os::windows::fs::symlink_file(original, link)
-        }
-        #[cfg(target_family = "wasm")]
-        {
-            let _ = (original, link);
-            Err(io::Error::new(io::ErrorKind::Unsupported, "symlinks are not supported"))
         }
     }
 
