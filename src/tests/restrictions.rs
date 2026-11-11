@@ -439,6 +439,9 @@ mod escaping_the_restriction {
 
     use crate::{ResolveError, ResolveOptions, Resolver, Restriction};
 
+    /// `\\?\`, spelled so that no literal ends with a backslash.
+    const VERBATIM_PREFIX: &str = concat!('\\', '\\', '?', '\\');
+
     fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
         #[cfg(target_family = "unix")]
         {
@@ -481,11 +484,11 @@ mod escaping_the_restriction {
             _ = fs::remove_dir_all(&root);
             fs::create_dir_all(root.join("allowed")).ok()?;
             fs::create_dir_all(root.join("outside")).ok()?;
-            // The restriction has to name the real directory, and Windows answers with a `\\?\`
-            // path where `join` collapses the `..` these tests are about.
+            // The restriction has to name the real directory, and Windows answers with a verbatim
+            // (`\\?\`) path where `join` collapses the `..` these tests are about.
             let canonical = root.canonicalize().ok()?;
             let canonical = canonical.to_str()?;
-            let root = PathBuf::from(canonical.strip_prefix(r"\\?\").unwrap_or(canonical));
+            let root = PathBuf::from(canonical.strip_prefix(VERBATIM_PREFIX).unwrap_or(canonical));
             fs::write(root.join("outside/secret.js"), "").ok()?;
             fs::write(root.join("allowed/real.js"), "").ok()?;
             symlink(root.join("outside/secret.js"), root.join("allowed/link.js")).ok()?;
