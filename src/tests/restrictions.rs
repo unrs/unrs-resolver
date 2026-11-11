@@ -475,24 +475,28 @@ mod escaping_the_restriction {
         }
     }
 
+    /// `allowed/{link,rel-link}.js` point at `outside/secret.js`.
+    fn build(root: &Path) -> io::Result<()> {
+        fs::create_dir_all(root.join("allowed"))?;
+        fs::create_dir_all(root.join("outside"))?;
+        fs::write(root.join("outside/secret.js"), "")?;
+        fs::write(root.join("allowed/real.js"), "")?;
+        symlink(root.join("outside/secret.js"), root.join("allowed/link.js"))?;
+        symlink(Path::new("../outside/secret.js"), root.join("allowed/rel-link.js"))
+    }
+
     impl Scratch {
-        /// `allowed/{link,rel-link}.js` point at `outside/secret.js`.
-        ///
         /// `None` when the platform refuses to create symlinks.
         fn new(name: &str) -> Option<Self> {
             let root = super::super::fixture_root().join("restrictions-scratch").join(name);
             _ = fs::remove_dir_all(&root);
-            fs::create_dir_all(root.join("allowed")).ok()?;
-            fs::create_dir_all(root.join("outside")).ok()?;
+            fs::create_dir_all(&root).ok()?;
             // The restriction has to name the real directory, and Windows answers with a verbatim
             // (`\\?\`) path where `join` collapses the `..` these tests are about.
             let canonical = root.canonicalize().ok()?;
             let canonical = canonical.to_str()?;
             let root = PathBuf::from(canonical.strip_prefix(VERBATIM_PREFIX).unwrap_or(canonical));
-            fs::write(root.join("outside/secret.js"), "").ok()?;
-            fs::write(root.join("allowed/real.js"), "").ok()?;
-            symlink(root.join("outside/secret.js"), root.join("allowed/link.js")).ok()?;
-            symlink(Path::new("../outside/secret.js"), root.join("allowed/rel-link.js")).ok()?;
+            build(&root).ok()?;
             Some(Self(root))
         }
     }
