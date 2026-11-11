@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::node_path::NodePath;
+use crate::{node_path::NodePath, path::PathUtil};
 
 /// Module Resolution Options
 ///
@@ -138,6 +138,11 @@ pub struct ResolveOptions {
     pub prefer_absolute: bool,
 
     /// A list of resolve restrictions to restrict the paths that a request can be resolved on.
+    ///
+    /// [`Restriction::Path`] restrictions are normalized when the resolver is built and compared
+    /// by path components: a restriction on a directory admits every file under it, while
+    /// `/a/b/c-other` is not inside `/a/b/c`. The final resolved path has to satisfy every
+    /// restriction, including the real path when [`ResolveOptions::symlinks`] is enabled.
     ///
     /// Default `[]`
     pub restrictions: Vec<Restriction>,
@@ -440,6 +445,19 @@ impl ResolveOptions {
                 self.enforce_extension = EnforceExtension::Enabled;
             } else {
                 self.enforce_extension = EnforceExtension::Disabled;
+            }
+        }
+
+        // Normalize restriction paths so that redundant separators, `.` and `..` segments, and a
+        // trailing separator do not change which paths a restriction admits. An empty value is
+        // kept as is because it matches every path, and `.`/`..` are kept because they are
+        // relative and therefore match no absolute path.
+        for restriction in &mut self.restrictions {
+            if let Restriction::Path(path) = restriction {
+                let normalized = path.normalize();
+                if !normalized.as_os_str().is_empty() {
+                    *path = normalized;
+                }
             }
         }
 
