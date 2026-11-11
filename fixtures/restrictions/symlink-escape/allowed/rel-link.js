@@ -1,0 +1,1 @@
+../../restrictions/symlink-escape/outside/secret.js

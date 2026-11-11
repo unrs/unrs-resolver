@@ -427,13 +427,10 @@ mod windows_path_boundaries {
 ///
 /// Ported from enhanced-resolve `restrictions > with symlinks`,
 /// <https://github.com/webpack/enhanced-resolve/pull/595>.
-///
-/// These need real symlinks, which wasm does not have.
 #[cfg(not(target_family = "wasm"))]
 mod escaping_the_restriction {
     use std::{
-        fs, io,
-        ops::Deref,
+        fs,
         path::{Path, PathBuf},
     };
 
@@ -442,63 +439,25 @@ mod escaping_the_restriction {
     /// `\\?\`, spelled so that no literal ends with a backslash.
     const VERBATIM_PREFIX: &str = concat!('\\', '\\', '?', '\\');
 
-    fn symlink<P: AsRef<Path>, Q: AsRef<Path>>(original: P, link: Q) -> io::Result<()> {
-        #[cfg(target_family = "unix")]
-        {
-            std::os::unix::fs::symlink(original, link)
-        }
-        #[cfg(target_os = "windows")]
-        {
-            std::os::windows::fs::symlink_file(original, link)
-        }
+    /// `fixtures/restrictions/symlink-escape`, where `allowed/{link,rel-link}.js` are committed
+    /// symlinks to `outside/secret.js`.
+    fn fixture() -> PathBuf {
+        let root = super::super::fixture_root().join("restrictions/symlink-escape");
+        // The restriction has to name the real directory: the checkout itself may be reached
+        // through a symlink, and Windows answers with a verbatim path.
+        let Ok(canonical) = root.canonicalize() else {
+            return root;
+        };
+        let Some(canonical) = canonical.to_str() else {
+            return root;
+        };
+        PathBuf::from(canonical.strip_prefix(VERBATIM_PREFIX).unwrap_or(canonical))
     }
 
-    /// A scratch directory under `fixtures/`, removed when dropped.
-    struct Scratch(PathBuf);
-
-    impl Deref for Scratch {
-        type Target = Path;
-
-        fn deref(&self) -> &Self::Target {
-            &self.0
-        }
-    }
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            _ = fs::remove_dir_all(&self.0);
-            // Succeeds for the last test to finish; fails harmlessly while a sibling subdirectory
-            // is still in use.
-            if let Some(parent) = self.0.parent() {
-                _ = fs::remove_dir(parent);
-            }
-        }
-    }
-
-    /// `allowed/{link,rel-link}.js` point at `outside/secret.js`.
-    fn build(root: &Path) -> io::Result<()> {
-        fs::create_dir_all(root.join("allowed"))?;
-        fs::create_dir_all(root.join("outside"))?;
-        fs::write(root.join("outside/secret.js"), "")?;
-        fs::write(root.join("allowed/real.js"), "")?;
-        symlink(root.join("outside/secret.js"), root.join("allowed/link.js"))?;
-        symlink(Path::new("../outside/secret.js"), root.join("allowed/rel-link.js"))
-    }
-
-    impl Scratch {
-        /// `None` when the platform refuses to create symlinks.
-        fn new(name: &str) -> Option<Self> {
-            let root = super::super::fixture_root().join("restrictions-scratch").join(name);
-            _ = fs::remove_dir_all(&root);
-            fs::create_dir_all(&root).ok()?;
-            // The restriction has to name the real directory, and Windows answers with a verbatim
-            // (`\\?\`) path where `join` collapses the `..` these tests are about.
-            let canonical = root.canonicalize().ok()?;
-            let canonical = canonical.to_str()?;
-            let root = PathBuf::from(canonical.strip_prefix(VERBATIM_PREFIX).unwrap_or(canonical));
-            build(&root).ok()?;
-            Some(Self(root))
-        }
+    /// Whether this checkout materialised the committed symlinks; some Windows checkouts turn
+    /// them into regular files.
+    fn has_symlinks(root: &Path) -> bool {
+        fs::symlink_metadata(root.join("allowed/link.js")).is_ok_and(|meta| meta.is_symlink())
     }
 
     fn resolve_with(root: &Path, specifier: &str, symlinks: bool) -> Result<PathBuf, ResolveError> {
@@ -514,10 +473,11 @@ mod escaping_the_restriction {
     }
 
     #[test]
-    fn in_root_symlink_to_an_outside_target() {
-        let Some(root) = Scratch::new("symlink") else {
+    fn symlink_to_an_outside_target_is_rejected() {
+        let root = fixture();
+        if !has_symlinks(&root) {
             return;
-        };
+        }
         assert_eq!(
             resolve_with(&root, "./link.js", true),
             Err(ResolveError::NotFound("./link.js".to_string()))
@@ -525,10 +485,11 @@ mod escaping_the_restriction {
     }
 
     #[test]
-    fn in_root_relative_symlink_to_an_outside_target() {
-        let Some(root) = Scratch::new("rel-symlink") else {
+    fn relative_symlink_to_an_outside_target_is_rejected() {
+        let root = fixture();
+        if !has_symlinks(&root) {
             return;
-        };
+        }
         assert_eq!(
             resolve_with(&root, "./rel-link.js", true),
             Err(ResolveError::NotFound("./rel-link.js".to_string()))
@@ -537,9 +498,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn parent_dir_traversal_in_an_absolute_specifier() {
-        let Some(root) = Scratch::new("traversal") else {
-            return;
-        };
+        let root = fixture();
         let escaping = root.join("allowed/../outside/secret.js");
         let escaping = escaping.to_str().expect("path should be UTF-8");
         assert_eq!(
@@ -550,9 +509,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn parent_dir_traversal_without_symlink_resolution() {
-        let Some(root) = Scratch::new("traversal-nosym") else {
-            return;
-        };
+        let root = fixture();
         let escaping = root.join("allowed/../outside/secret.js");
         let escaping = escaping.to_str().expect("path should be UTF-8");
         assert_eq!(
@@ -563,9 +520,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn real_in_root_file_still_resolves() {
-        let Some(root) = Scratch::new("real") else {
-            return;
-        };
+        let root = fixture();
         assert_eq!(resolve_with(&root, "./real.js", true), Ok(root.join("allowed/real.js")));
     }
 }
