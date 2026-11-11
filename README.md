@@ -294,7 +294,7 @@ Test cases are located in `./src/tests`, fixtures are located in `./tests`
 - [ ] plugins.test.js
 - [ ] pnp.test.js
 - [x] resolve.test.js
-- [x] restrictions.test.js (partially done, regex is not supported yet)
+- [x] restrictions.test.js
 - [x] roots.test.js
 - [x] scoped-packages.test.js
 - [x] simple.test.js

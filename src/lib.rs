@@ -348,6 +348,15 @@ impl ResolverImpl {
 
         let path = self.load_realpath(&cached_path)?;
 
+        // A restriction has to hold for the path the resolver returns, not for the spelling a
+        // candidate happened to have while it was being selected: a symlink, or a `..` segment
+        // that only disappears once the path is normalized or realpathed, can otherwise escape a
+        // restriction the candidate itself satisfied.
+        // <https://github.com/webpack/enhanced-resolve/pull/595>
+        if !self.options.restrictions.is_empty() && !self.check_restrictions(&path.normalize()) {
+            return Err(ResolveError::NotFound(specifier.to_string()));
+        }
+
         let package_json = self.find_package_json_for_a_package(&cached_path, ctx)?;
         let module_type = self.esm_file_format(&cached_path, ctx)?;
 
@@ -901,19 +910,14 @@ impl ResolverImpl {
 
     fn check_restrictions(&self, path: &Path) -> bool {
         // https://github.com/webpack/enhanced-resolve/blob/a998c7d218b7a9ec2461fc4fddd1ad5dd7687485/lib/RestrictionsPlugin.js#L19-L24
-        fn is_inside(path: &Path, parent: &Path) -> bool {
-            if !path.starts_with(parent) {
-                return false;
-            }
-            if path.as_os_str().len() == parent.as_os_str().len() {
-                return true;
-            }
-            path.strip_prefix(parent).is_ok_and(|p| p == Path::new("./"))
-        }
+        //
+        // `Path::starts_with` compares whole components, so a restriction on a directory admits
+        // everything under it while `/a/b/c-other` is not inside `/a/b/c`. Restriction paths are
+        // normalized by [`ResolveOptions::sanitize`], and an empty one matches every path.
         for restriction in &self.options.restrictions {
             match restriction {
                 Restriction::Path(restricted_path) => {
-                    if !is_inside(path, restricted_path) {
+                    if !path.starts_with(restricted_path) {
                         return false;
                     }
                 }
