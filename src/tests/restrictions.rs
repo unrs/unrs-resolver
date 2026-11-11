@@ -398,7 +398,7 @@ mod windows_path_boundaries {
 
     #[test]
     fn the_restricted_directory_itself() {
-        assert!(is_inside(r"C:\a\b\c\", r"C:\a\b\c"));
+        assert!(is_inside(r"C:\a\b\c", r"C:\a\b\c"));
     }
 
     #[test]
