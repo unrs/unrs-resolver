@@ -436,22 +436,10 @@ mod escaping_the_restriction {
 
     use crate::{ResolveError, ResolveOptions, Resolver, Restriction};
 
-    /// `\\?\`, spelled so that no literal ends with a backslash.
-    const VERBATIM_PREFIX: &str = concat!('\\', '\\', '?', '\\');
-
     /// `fixtures/restrictions/symlink-escape`, where `allowed/{link,rel-link}.js` are committed
     /// symlinks to `outside/secret.js`.
     fn fixture() -> PathBuf {
-        let root = super::super::fixture_root().join("restrictions/symlink-escape");
-        // The restriction has to name the real directory: the checkout itself may be reached
-        // through a symlink, and Windows answers with a verbatim path.
-        let Ok(canonical) = root.canonicalize() else {
-            return root;
-        };
-        let Some(canonical) = canonical.to_str() else {
-            return root;
-        };
-        PathBuf::from(canonical.strip_prefix(VERBATIM_PREFIX).unwrap_or(canonical))
+        super::super::fixture_root().join("restrictions/symlink-escape")
     }
 
     /// Whether this checkout materialised the committed symlinks; some Windows checkouts turn

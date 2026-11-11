@@ -1,1 +1,1 @@
-../../restrictions/symlink-escape/outside/secret.js
+./../outside/secret.js
