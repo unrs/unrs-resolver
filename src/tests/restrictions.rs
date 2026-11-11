@@ -302,6 +302,7 @@ fn should_respect_parent_directory_restriction() {
 ///
 /// Ported from enhanced-resolve `restrictions` (`d8693b6`) and
 /// <https://github.com/web-infra-dev/rspack-resolver/pull/288>.
+#[cfg(not(target_os = "windows"))]
 mod path_boundaries {
     use std::path::Path;
 
@@ -316,103 +317,108 @@ mod path_boundaries {
         resolver.check_restrictions(Path::new(path))
     }
 
-    #[cfg(not(target_os = "windows"))]
-    mod unix {
-        use super::is_inside;
-
-        #[test]
-        fn file_inside_a_restriction() {
-            assert!(is_inside("/a/b/c", "/a/b/c/index.js"));
-        }
-
-        #[test]
-        fn the_restricted_directory_itself() {
-            assert!(is_inside("/a/b/c", "/a/b/c"));
-        }
-
-        #[test]
-        fn sibling_of_a_restriction() {
-            assert!(!is_inside("/a/b/c", "/a/b/c-other.js"));
-        }
-
-        #[test]
-        fn file_inside_a_restriction_ending_with_a_separator() {
-            assert!(is_inside("/a/b/c/", "/a/b/c/index.js"));
-        }
-
-        #[test]
-        fn file_inside_a_non_normalized_restriction() {
-            assert!(is_inside("/a/x/../b/c", "/a/b/c/index.js"));
-        }
-
-        #[test]
-        fn file_inside_the_root_restriction() {
-            assert!(is_inside("/", "/a/index.js"));
-        }
-
-        #[test]
-        fn empty_restriction_matches_every_path() {
-            assert!(is_inside("", "/a/b/c/index.js"));
-        }
-
-        #[test]
-        fn relative_restriction_matches_no_absolute_path() {
-            assert!(!is_inside(".", "/a/b/c/index.js"));
-            assert!(!is_inside("..", "/a/b/c/index.js"));
-            assert!(!is_inside("foo/..", "/a/b/c/index.js"));
-        }
-
-        #[test]
-        fn file_inside_a_restriction_differing_in_case() {
-            assert!(!is_inside("/A/B/C", "/a/b/c/index.js"));
-        }
+    #[test]
+    fn file_inside_a_restriction() {
+        assert!(is_inside("/a/b/c", "/a/b/c/index.js"));
     }
 
-    /// Windows path forms cannot travel through a resolver on a posix host, so the check is
-    /// driven directly, the way upstream drives its plugin.
-    #[cfg(target_os = "windows")]
-    mod windows {
-        use super::is_inside;
+    #[test]
+    fn the_restricted_directory_itself() {
+        assert!(is_inside("/a/b/c", "/a/b/c"));
+    }
 
-        #[test]
-        fn path_using_slashes_under_a_backslash_restriction() {
-            assert!(is_inside(r"C:\a\b\c", "C:/a/b/c/index.js"));
-        }
+    #[test]
+    fn sibling_of_a_restriction() {
+        assert!(!is_inside("/a/b/c", "/a/b/c-other.js"));
+    }
 
-        #[test]
-        fn path_mixing_separators_under_a_slash_restriction() {
-            assert!(is_inside("C:/a/b/c", r"C:\a\b/c/index.js"));
-        }
+    #[test]
+    fn file_inside_a_restriction_ending_with_a_separator() {
+        assert!(is_inside("/a/b/c/", "/a/b/c/index.js"));
+    }
 
-        #[test]
-        fn path_under_a_restriction_ending_with_a_slash() {
-            assert!(is_inside(r"C:\a\b\c/", r"C:\a\b\c\index.js"));
-        }
+    #[test]
+    fn file_inside_a_non_normalized_restriction() {
+        assert!(is_inside("/a/x/../b/c", "/a/b/c/index.js"));
+    }
 
-        #[test]
-        fn the_restricted_directory_itself() {
-            assert!(is_inside(r"C:\a\b\c\", r"C:\a\b\c"));
-        }
+    #[test]
+    fn file_inside_the_root_restriction() {
+        assert!(is_inside("/", "/a/index.js"));
+    }
 
-        #[test]
-        fn path_inside_a_unc_restriction() {
-            assert!(is_inside(r"\\server\share\a", r"\\server\share\a\index.js"));
-        }
+    #[test]
+    fn empty_restriction_matches_every_path() {
+        assert!(is_inside("", "/a/b/c/index.js"));
+    }
 
-        #[test]
-        fn path_inside_a_dos_device_restriction() {
-            assert!(is_inside(r"\\?\C:\a", r"\\?\C:\a\index.js"));
-        }
+    #[test]
+    fn relative_restriction_matches_no_absolute_path() {
+        assert!(!is_inside(".", "/a/b/c/index.js"));
+        assert!(!is_inside("..", "/a/b/c/index.js"));
+        assert!(!is_inside("foo/..", "/a/b/c/index.js"));
+    }
 
-        #[test]
-        fn path_on_another_share_than_the_unc_restriction() {
-            assert!(!is_inside(r"\\server\share\a", r"\\server\other\a\index.js"));
-        }
+    #[test]
+    fn file_inside_a_restriction_differing_in_case() {
+        assert!(!is_inside("/A/B/C", "/a/b/c/index.js"));
+    }
+}
 
-        #[test]
-        fn sibling_of_a_restriction_written_with_slashes() {
-            assert!(!is_inside(r"C:\a\b\c", "C:/a/b/c-other.js"));
-        }
+/// Windows path forms cannot travel through a resolver on a posix host, so the check is driven
+/// directly, the way upstream drives its plugin.
+#[cfg(target_os = "windows")]
+mod windows_path_boundaries {
+    use std::path::Path;
+
+    use crate::{ResolveOptions, Resolver, Restriction};
+
+    fn is_inside(restriction: &str, path: &str) -> bool {
+        let resolver = Resolver::new(ResolveOptions {
+            restrictions: vec![Restriction::Path(restriction.into())],
+            ..ResolveOptions::default()
+        });
+        resolver.check_restrictions(Path::new(path))
+    }
+
+    #[test]
+    fn path_using_slashes_under_a_backslash_restriction() {
+        assert!(is_inside(r"C:\a\b\c", "C:/a/b/c/index.js"));
+    }
+
+    #[test]
+    fn path_mixing_separators_under_a_slash_restriction() {
+        assert!(is_inside("C:/a/b/c", r"C:\a\b/c/index.js"));
+    }
+
+    #[test]
+    fn path_under_a_restriction_ending_with_a_slash() {
+        assert!(is_inside(r"C:\a\b\c/", r"C:\a\b\c\index.js"));
+    }
+
+    #[test]
+    fn the_restricted_directory_itself() {
+        assert!(is_inside(r"C:\a\b\c\", r"C:\a\b\c"));
+    }
+
+    #[test]
+    fn path_inside_a_unc_restriction() {
+        assert!(is_inside(r"\\server\share\a", r"\\server\share\a\index.js"));
+    }
+
+    #[test]
+    fn path_inside_a_dos_device_restriction() {
+        assert!(is_inside(r"\\?\C:\a", r"\\?\C:\a\index.js"));
+    }
+
+    #[test]
+    fn path_on_another_share_than_the_unc_restriction() {
+        assert!(!is_inside(r"\\server\share\a", r"\\server\other\a\index.js"));
+    }
+
+    #[test]
+    fn sibling_of_a_restriction_written_with_slashes() {
+        assert!(!is_inside(r"C:\a\b\c", "C:/a/b/c-other.js"));
     }
 }
 
@@ -422,11 +428,12 @@ mod path_boundaries {
 /// Ported from enhanced-resolve `restrictions > with symlinks`,
 /// <https://github.com/webpack/enhanced-resolve/pull/595>.
 ///
-/// These need real symlinks and a temporary directory, neither of which exists under wasm.
+/// These need real symlinks, which wasm does not have.
 #[cfg(not(target_family = "wasm"))]
 mod escaping_the_restriction {
     use std::{
         fs, io,
+        ops::Deref,
         path::{Path, PathBuf},
     };
 
@@ -443,25 +450,48 @@ mod escaping_the_restriction {
         }
     }
 
-    /// `allowed/{link,rel-link}.js` point at `outside/secret.js`.
-    ///
-    /// `None` when the platform refuses to create symlinks.
-    fn fixture(name: &str) -> Option<PathBuf> {
-        let root = std::env::temp_dir().join(name);
-        _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(root.join("allowed")).ok()?;
-        fs::create_dir_all(root.join("outside")).ok()?;
-        // `/var` is a symlink on macOS, so the restriction has to name the real directory.
-        // Windows answers with a `\\?\` path, where `join` collapses the `..` these tests are
-        // about and the resolver cannot take it as a specifier.
-        let canonical = root.canonicalize().ok()?;
-        let canonical = canonical.to_str()?;
-        let root = PathBuf::from(canonical.strip_prefix(r"\\?\").unwrap_or(canonical));
-        fs::write(root.join("outside/secret.js"), "").ok()?;
-        fs::write(root.join("allowed/real.js"), "").ok()?;
-        symlink(root.join("outside/secret.js"), root.join("allowed/link.js")).ok()?;
-        symlink(Path::new("../outside/secret.js"), root.join("allowed/rel-link.js")).ok()?;
-        Some(root)
+    /// A scratch directory under `fixtures/`, removed when dropped.
+    struct Scratch(PathBuf);
+
+    impl Deref for Scratch {
+        type Target = Path;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            _ = fs::remove_dir_all(&self.0);
+            // Succeeds for the last test to finish; fails harmlessly while a sibling subdirectory
+            // is still in use.
+            if let Some(parent) = self.0.parent() {
+                _ = fs::remove_dir(parent);
+            }
+        }
+    }
+
+    impl Scratch {
+        /// `allowed/{link,rel-link}.js` point at `outside/secret.js`.
+        ///
+        /// `None` when the platform refuses to create symlinks.
+        fn new(name: &str) -> Option<Self> {
+            let root = super::super::fixture_root().join("restrictions-scratch").join(name);
+            _ = fs::remove_dir_all(&root);
+            fs::create_dir_all(root.join("allowed")).ok()?;
+            fs::create_dir_all(root.join("outside")).ok()?;
+            // The restriction has to name the real directory, and Windows answers with a `\\?\`
+            // path where `join` collapses the `..` these tests are about.
+            let canonical = root.canonicalize().ok()?;
+            let canonical = canonical.to_str()?;
+            let root = PathBuf::from(canonical.strip_prefix(r"\\?\").unwrap_or(canonical));
+            fs::write(root.join("outside/secret.js"), "").ok()?;
+            fs::write(root.join("allowed/real.js"), "").ok()?;
+            symlink(root.join("outside/secret.js"), root.join("allowed/link.js")).ok()?;
+            symlink(Path::new("../outside/secret.js"), root.join("allowed/rel-link.js")).ok()?;
+            Some(Self(root))
+        }
     }
 
     fn resolve_with(root: &Path, specifier: &str, symlinks: bool) -> Result<PathBuf, ResolveError> {
@@ -478,7 +508,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn in_root_symlink_to_an_outside_target() {
-        let Some(root) = fixture("unrs_resolver_restriction_symlink") else {
+        let Some(root) = Scratch::new("symlink") else {
             return;
         };
         assert_eq!(
@@ -489,7 +519,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn in_root_relative_symlink_to_an_outside_target() {
-        let Some(root) = fixture("unrs_resolver_restriction_rel_symlink") else {
+        let Some(root) = Scratch::new("rel-symlink") else {
             return;
         };
         assert_eq!(
@@ -500,7 +530,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn parent_dir_traversal_in_an_absolute_specifier() {
-        let Some(root) = fixture("unrs_resolver_restriction_traversal") else {
+        let Some(root) = Scratch::new("traversal") else {
             return;
         };
         let escaping = root.join("allowed/../outside/secret.js");
@@ -513,7 +543,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn parent_dir_traversal_without_symlink_resolution() {
-        let Some(root) = fixture("unrs_resolver_restriction_traversal_nosym") else {
+        let Some(root) = Scratch::new("traversal-nosym") else {
             return;
         };
         let escaping = root.join("allowed/../outside/secret.js");
@@ -526,7 +556,7 @@ mod escaping_the_restriction {
 
     #[test]
     fn real_in_root_file_still_resolves() {
-        let Some(root) = fixture("unrs_resolver_restriction_real") else {
+        let Some(root) = Scratch::new("real") else {
             return;
         };
         assert_eq!(resolve_with(&root, "./real.js", true), Ok(root.join("allowed/real.js")));
